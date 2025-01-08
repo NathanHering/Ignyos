@@ -22,16 +22,6 @@ page = {
       ele.appendChild(this.questionEle)
       ele.appendChild(this.answerEle)
       ele.appendChild(this.questionControls)
-      // if (state.quiz.completeDateUTC !== null) {
-      //    ele.classList.add('results')
-      //    ele.appendChild(this.summaryEle)
-      //    ele.appendChild(this.questionListEle)
-      // } else {
-      //    ele.classList.add('without-answer')
-      //    ele.appendChild(this.questionEle)
-      //    ele.appendChild(this.answerEle)
-      //    ele.appendChild(this.questionControls)
-      // }
       return ele
    },
 
@@ -179,14 +169,13 @@ page = {
       } else {
          await app.route()
       }
-      // await app.route()
    },
 
    //#endregion
 
    async quitQuiz() {
       app.confirm(async () => {
-         let response = await api.PUT('ignyos/quiz/quit',{},[[state.quiz.id]])
+         let response = await api.POST('ignyos/quiz/quit',{},[[state.quiz.id]])
          let data = app.processApiResponse(response)
          if (data == false) {
             state.quiz = {id: 0, startDateUTC: null, allQuestionIds: [], answeredQuestionIds: []}

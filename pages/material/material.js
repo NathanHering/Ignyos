@@ -172,7 +172,7 @@ page = {
    },
 
    async deleteSubject(subject) {
-      let response = await api.DELETE('ignyos/subject', [["id",subject.id]])
+      let response = await api.GET('ignyos/subject/delete', [["id",subject.id]])
       let data = app.processApiResponse(response)
       if (data) state.deleteAccountSubject(subject.id)
       await this.refreshSubjectPane()
@@ -221,7 +221,7 @@ page = {
       let val = document.getElementById('edit-subject').value.trim()
       if (val == '') return
       subject.title = val
-      let response = await api.PUT('ignyos/subject', subject)
+      let response = await api.POST('ignyos/subject/update', subject)
       let data = app.processApiResponse(response)
       if (data === true) {
          state.updateAccountSubject(subject)
@@ -378,7 +378,7 @@ page = {
             subjectId: state.selectedSubjectId,
             focusTopicIds: JSON.stringify(state.selectedSubject.focusTopicIds)
          }
-         await api.PUT('ignyos/subject/focus',body)
+         await api.POST('ignyos/subject/focus',body)
          await this.refreshSubjectPane()
          await this.refreshTopicPane()
       })
@@ -409,7 +409,7 @@ page = {
    },
 
    async deleteTopic(topic) {
-      let response = await api.DELETE('ignyos/Topic', [["id",topic.id]])
+      let response = await api.GET('ignyos/Topic/Delete', [["id",topic.id]])
       let data = app.processApiResponse(response)
       if (data) {
          if (state.deleteTopic(topic)) {
@@ -418,7 +418,7 @@ page = {
                subjectId: state.selectedSubjectId,
                focusTopicIds: JSON.stringify(state.selectedSubject.focusTopicIds)
             }
-            await api.PUT('ignyos/subject/focus',body)
+            await api.POST('ignyos/subject/focus',body)
             this.refreshSubjectPane()
          }
       }
@@ -468,7 +468,7 @@ page = {
       if (val == '') return
       topic.subjectId = state.selectedSubjectId
       topic.title = val
-      let response = await api.PUT('ignyos/topic', topic)
+      let response = await api.POST('ignyos/topic/update', topic)
       let data = app.processApiResponse(response)
       state.updateTopic(data)
       this.refreshTopicPane(true)
@@ -621,7 +621,7 @@ page = {
    },
 
    async deleteQuestion(question) {
-      let response = await api.DELETE('ignyos/Question', [["id",question.id]])
+      let response = await api.GET('ignyos/question/delete', [["id",question.id]])
       let data = app.processApiResponse(response)
       if (data) state.deleteQuestion(question)
       this.refreshQuestionPane(true)
@@ -717,7 +717,7 @@ page = {
             let data = app.processApiResponse(response)
             state.addQuestion(data)
          } else {
-            response = await api.PUT("ignyos/Question", form)
+            response = await api.POST("ignyos/Question/Update", form)
             let data = app.processApiResponse(response)
             state.updateQuestion(data)
          }
