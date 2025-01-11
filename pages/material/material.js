@@ -124,13 +124,13 @@ page = {
       let ele = document.createElement('div')
       ele.id = `sub-${subject.id}`
 
-      let focus = document.createElement('span')
-      if (subject.focusTopicIds.length > 0) focus.innerText = '*'
-      ele.appendChild(focus)
-
       let txt = document.createElement('div')
       txt.innerText = subject.title
       ele.appendChild(txt)
+
+      let focus = document.createElement('span')
+      if (subject.focusTopicIds.length > 0) focus.innerText = '*'
+      ele.appendChild(focus)
 
       if (state.selectedSubjectId == subject.id) {
          ele.classList.add('item-selected')
@@ -574,11 +574,13 @@ page = {
 
    populateQuestionList() {
       let questionList = document.getElementById('question-list')
-      questionList.innerHTML = null
-      questionList.classList.remove('v-loading')
-      state.questions.forEach(question => {
-         questionList.appendChild(this.questionListItem(question))
+      if (questionList) {
+         questionList.innerHTML = null
+         questionList.classList.remove('v-loading')
+         state.questions.forEach(question => {
+            questionList.appendChild(this.questionListItem(question))
       })
+      }
    },
 
    questionListItem(question) {
