@@ -330,9 +330,9 @@ navigation = {
       return ele
    },
 
-   getNavItemPill(word, selected) {
+   getNavItemPill(text, selected) {
       let ele = document.createElement('div')
-      ele.innerText = word
+      ele.innerText = text
       if (selected) {
          ele.classList.add('pill-selected')
       } else {
@@ -340,28 +340,6 @@ navigation = {
       }
       return ele
    },
-
-   // get statsBtn() {
-   //    let ele = document.createElement('div')
-   //    ele.id = 'stats'
-   //    if (state.currentPage != pages.STATS) {
-   //       ele.addEventListener('click', async () => {
-   //          state.currentPage = pages.STATS
-   //          await app.route()
-   //       })
-   //    }
-   //    return ele
-   // },
-
-   // get settingsBtn() {
-   //    let ele = document.createElement('div')
-   //    ele.id = 'settings'
-   //    ele.addEventListener('click', async () => {
-   //       state.currentPage = pages.SETTINGS
-   //       await app.route()
-   //    })
-   //    return ele
-   // }
 }
 
 messageCenter = {
