@@ -175,7 +175,7 @@ page = {
 
    async quitQuiz() {
       app.confirm(async () => {
-         let response = await api.POST('ignyos/quiz/quit',{},[[state.quiz.id]])
+         let response = await api.POST('ignyos/quiz/quit',state.quiz.id)
          let data = app.processApiResponse(response)
          if (data == false) {
             state.quiz = {id: 0, startDateUTC: null, allQuestionIds: [], answeredQuestionIds: []}
