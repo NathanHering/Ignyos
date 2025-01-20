@@ -1,37 +1,35 @@
 class App {
-   constructor(appName) {
-      this.appName = appName
+   constructor() {
       document.head.appendChild(this.title)
       this.route()
    }
 
    async route() {
-      this.initSiteHeader()
-      if (api.userIsSignedIn) {
-         await this.getOpenQuiz()
-         if (state.quiz.id != 0) {
+      this.hideModal()
+      state.currentAccount = await dbCtx.account.current()
+      state.currentPage = pages.HOME
+      await this.initSiteHeader()
+      if (state.currentAccount.name !== '') {
+         await this.updateAccountLastUsed()
+         state.currentPage = pages.MATERIAL
+         const q = await dbCtx.quiz.open(state.currentAccount.id)
+         if (q) {
+            state.quiz = q
             state.currentPage = pages.QUIZ
-         } else {
-            state.currentPage = pages.MATERIAL
          }
-         this.initNav()
-      } else {
-         state.currentPage = pages.HOME
       }
       await this.loadPage()
    }
 
-   async getOpenQuiz() {
-      let response = await api.GET("ignyos/quiz/open")
-      let data = this.processApiResponse(response)
-      state.quiz = data
-   }
-
-   initSiteHeader() {
+   async initSiteHeader() {
       let siteHeader = document.getElementById('site-header')
-      if (siteHeader) siteHeader.remove()
-      document.body.appendChild(new SiteHeader(appName).element)
-      this.funtilityUi = new FuntilityUI(api)
+      if (siteHeader)
+      {
+         siteHeader.remove()
+         // console.log('removed SiteHeader')
+      }
+      
+      document.body.appendChild(await new SiteHeader().getElement())
    }
 
    initNav() {
@@ -43,7 +41,7 @@ class App {
    get title()
    {
       let ele = document.createElement('title')
-      ele.innerHTML = this.appName;
+      ele.innerHTML = "Ignyos"
       return ele
    }
 
@@ -59,7 +57,7 @@ class App {
             await page.load()
          })
       } catch(err) {
-         console.log(err)
+         console.error(err)
          messageCenter.addError("Error loading page.")
       }
    }
@@ -114,26 +112,9 @@ class App {
       const result = {}
       result[pages.HOME] = 0;
       result[pages.QUIZ] = 0;
-      // result[pages.SETTINGS] = 0;
-      // result[pages.STATS] = 0;
       result[pages.MATERIAL] = 0;
       return result
    }
-
-   //#region Funtility API
-
-   processApiResponse(apiResponse)
-   {
-      if (apiResponse.hasErrors) {
-         apiResponse.errors.forEach(err => {
-            console.error(err)
-            messageCenter.addError(err)
-         })
-      }
-      return apiResponse.result
-   }
-
-   //#endregion
 
    //#region Modals
 
@@ -141,10 +122,8 @@ class App {
 
    confirm(okFn, message = 'Are You Sure?') {
       this.hideModal()
-
       let bg = document.createElement('div')
       bg.id = 'modal-bg'
-      bg.classList.add('confirm-modal-bg')
       bg.addEventListener('click', this.hideModal)
       bg.appendChild(this.getConfirmModal(okFn, message))
       document.body.appendChild(bg)
@@ -155,24 +134,72 @@ class App {
       msg.classList.add('msg')
       msg.innerText = message
 
+      let ele = document.createElement('div')
+      ele.classList.add('modal')
+      ele.classList.add('confirm')
+      ele.appendChild(msg)
+      ele.appendChild(this.getOkayBtn(okFn))
+      ele.appendChild(this.getCancelBtn())
+      ele.addEventListener('click', (event) => { event.stopPropagation() })
+      return ele
+   }
+
+   input(okFn, message = 'Enter Value') {
+      this.getModal(okFn, message, 'input')
+   }
+
+   getModal(okFn, message, type) {
+      this.hideModal()
+      let ele = document.createElement('div')
+      ele.classList.add('modal')
+
+      let main;
+      switch (type) {
+         case 'confirm':
+            main = document.createElement('div')
+            main.classList.add('msg')
+            main.innerText = message
+            ele.classList.add('confirm')
+            break
+         case 'input':
+            main = document.createElement('input')
+            main.id = 'modal-input'
+            main.type = 'text'
+            main.placeholder = message
+            ele.classList.add('input')
+            break
+         default:
+            break
+      }
+
+      ele.appendChild(main)
+      ele.appendChild(this.getOkayBtn(() => { okFn(main.value); }))
+      ele.appendChild(this.getCancelBtn())
+      ele.addEventListener('click', (event) => { event.stopPropagation() })
+      
+      let bg = document.createElement('div')
+      bg.id = 'modal-bg'
+      bg.addEventListener('click', this.hideModal)
+      bg.appendChild(ele)
+      document.body.appendChild(bg)
+   }
+
+   getOkayBtn(okFn) {
       let ok = document.createElement('div')
       ok.classList.add('btn')
       ok.classList.add('ok')
       ok.innerText = 'OK'
       ok.addEventListener('click', okFn)
+      return ok
+   }
 
+   getCancelBtn() {
       let cancel = document.createElement('div')
       cancel.classList.add('btn')
       cancel.classList.add('cancel')
       cancel.innerText = 'CANCEL'
       cancel.addEventListener('click', this.hideModal)
-
-      let ele = document.createElement('div')
-      ele.classList.add('confirm-modal')
-      ele.appendChild(msg)
-      ele.appendChild(ok)
-      ele.appendChild(cancel)
-      return ele
+      return cancel
    }
 
    //#endregion
@@ -197,64 +224,182 @@ class App {
    }
 
    //#endregion
+
+   async updateAccountLastUsed() {
+      let acct = state.currentAccount
+      if (!acct) return
+      acct.lastUsed = new Date().toISOString()
+      await dbCtx.account.update(acct)
+   }
 }
 
 class SiteHeader {
-   constructor(siteName) {
-      this.siteName = siteName
+   constructor() {
+      // console.log('SiteHeader')
    }
 
-   get element()
+   async getElement()
    {
       let e = document.createElement('div')
       e.id = 'site-header'
-      e.appendChild(this.siteLabel)
+      e.appendChild(await this.getSiteLabel())
       e.appendChild(document.createElement('div'))
-      e.appendChild(this.signIn)
+      e.appendChild(this.acctName)
       return e
    }
    
-   get siteLabel()
+   async getSiteLabel()
    {
-      let img = document.createElement('img')
-      img.src = './images/logo.svg'
-
-      let span = document.createElement('span')
-      span.innerText = this.siteName;
-
       let e = document.createElement('div')
-      e.classList.add('site-label')
-      e.appendChild(img)
-      e.appendChild(span)
-
+      e.id="menu-button"
+      e.innerText = "|||"
       e.addEventListener('click', async () => {
-         if (state.currentPage == pages.QUIZ) {
-            messageCenter.addInfo('Complete the quiz first.')
-         } else {
-            state.currentPage = pages.HOME
-            await app.route()
-         }
+         await this.displayMenu()
       })
       return e
    }
 
-   get signIn()
-   {
+   async displayMenu() {
+      let menu = document.getElementById('main-menu');
+      if (menu) { menu.remove() }
+      menu = await this.getMainMenu();
+      document.body.appendChild(menu);
+      menu.classList.toggle('hidden');
+      document.addEventListener('click', this.hideMenuOnClickOutside.bind(this));
+    }
+
+    hideMenuOnClickOutside(event) {
+        const menu = document.getElementById('main-menu');
+        const button = document.getElementById('menu-button');
+        if (menu && !menu.contains(event.target) && !button.contains(event.target)) {
+            menu.classList.add('hidden');
+            document.removeEventListener('click', this.hideMenuOnClickOutside.bind(this));
+        }
+    }
+
+   async getMainMenu() {
       let e = document.createElement('div')
-      e.id = 'funtility'
+      e.id = 'main-menu'
+      e.classList.add('hidden')
+      e.classList.add('menu')
+      let ul = document.createElement('ul')
+      let newAcct = this.getMenuItem("New Account")
+      newAcct.addEventListener('click', this.createNewAccount)
+      ul.appendChild(newAcct)
+      ul.appendChild(this.getMenuItem("Switch Account" , await this.getAcctSubMenu()))
+      ul.appendChild(document.createElement('hr'))
+      ul.appendChild(this.getMenuItem("Quiz Me!", false))
+      e.appendChild(ul)
       return e
+   }
+
+   getMenuItem(txt, submenu = false) {
+      let li = document.createElement('li')
+      let span = document.createElement('span')
+      span.innerText = txt
+      li.appendChild(span)
+      let arrowDiv = document.createElement('div')
+      li.appendChild(arrowDiv)
+      if (submenu) {
+            arrowDiv.classList.add('chev-r')
+            document.body.appendChild(submenu)
+            li.addEventListener('click', (event) => {
+               event.stopPropagation()
+               const rect = li.getBoundingClientRect()
+               submenu.style.top = `${rect.top - 7}px`
+               submenu.style.left = `${rect.right + 3}px`
+               submenu.classList.add('menu')
+               submenu.classList.toggle('hidden')
+               submenu.addEventListener('click', (event) => {
+                  submenu.classList.add('hidden')
+               })
+               document.addEventListener('click', this.hideSubMenuOnClickOutside.bind(this, submenu));
+         })
+      }
+      return li
+   }
+
+   hideSubMenuOnClickOutside(submenu, event) {
+        if (!submenu.contains(event.target)) {
+            submenu.classList.add('hidden');
+            document.removeEventListener('click', this.hideSubMenuOnClickOutside.bind(this, submenu));
+        }
+    }
+
+    hideElementOnClickOutside(element, event) {
+      if (!element.contains(event.target)) {
+            element.classList.add('hidden');
+            document.removeEventListener('click', this.hideElementOnClickOutside.bind(this, element));
+      }
+   }
+
+   async getAcctSubMenu() {
+      let subMenu = document.createElement('div')
+      subMenu.classList.add('sub-menu')
+      subMenu.classList.add('hidden')
+      let ul = document.createElement('ul')
+
+      let accounts = await dbCtx.account.all()
+      accounts.sort((a,b) => new Date(b.lastUsed) - new Date(a.lastUsed))
+      accounts.forEach (acct => {
+         let li = this.getAcctListItem(acct.name)
+         li.addEventListener('click', async () => {
+            await this.switchToAccount(acct.id)
+         })
+         ul.appendChild(li)
+      })
+      subMenu.appendChild(ul)
+      return subMenu
+   }
+
+   getAcctListItem(txt) {
+      let li = document.createElement('li');
+      let span = document.createElement('span');
+      span.innerText = txt;
+      li.appendChild(span);
+      return li;
+   }
+
+   createNewAccount(){
+      app.input(async (val) => { 
+         let n = val.trim()
+         if (n.length > 0) {
+            if (await dbCtx.account.exists(n)) {
+               messageCenter.addError(`Account '${n}' already exists.`)
+            } else {
+               const newAccount = new Account({ name: n });
+               await dbCtx.account.add(newAccount)
+               await dbCtx.metadata.setSelectedAccountId(newAccount.id)
+               app.route()
+            }
+         } else {
+            messageCenter.addError('Account Name cannot be blank.')
+         }
+      }, 'Account Name...');
+      document.getElementById('main-menu').remove();
+   }
+
+   async switchToAccount(id) {
+      console.log(`Switching to account ${id}`)
+      await dbCtx.metadata.setSelectedAccountId(id)
+      app.route()
+   }
+
+   get acctName()
+   {
+      let div = document.createElement('div')
+      div.classList.add('acct-name')
+      div.innerText = state.currentAccount.name
+      return div
    }
 }
 
 navigation = {
    get element() {
       let n = this.nav
-      if (state.quiz.completeDateUTC || state.quiz.id == 0) {
+      if (state.quiz.completeDate || state.quiz.id == 0) {
          n.classList.add('standard')
-         n.appendChild(this.materialBtn)
          n.appendChild(this.quizBtn)
-         // n.appendChild(this.statsBtn)
-         // n.appendChild(this.settingsBtn)
       } else {
          n.classList.add('quiz')
          n.appendChild(this.questionCounter)
@@ -302,21 +447,8 @@ navigation = {
       return ele
    },
 
-   get materialBtn() {
-      let ele = this.getNavItemPill("Study Material", state.currentPage == pages.MATERIAL)
-      ele.id = 'study-material'
-      if (state.currentPage != pages.MATERIAL) {
-         ele.addEventListener('click', async () => {
-            state.quiz = new Quiz()
-            state.currentPage = pages.MATERIAL
-            await app.route()
-         })
-      }
-      return ele
-   },
-
    get quizBtn() {
-      let ele = this.getNavItemPill("Take a Quiz", state.currentPage == pages.QUIZ)
+      let ele = this.getNavItemPill("Quiz Me!", state.currentPage == pages.QUIZ)
       ele.id = 'create-quiz'
       if (state.currentPage != pages.QUIZ) {
          ele.addEventListener('click', async () => {
@@ -366,3 +498,4 @@ messageCenter = {
       this.element.appendChild(ele)
    }
 }
+

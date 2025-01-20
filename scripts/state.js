@@ -2,23 +2,6 @@ const pages = {
    HOME: "home",
    MATERIAL: "material",
    QUIZ: "quiz",
-   // SETTINGS: "Settings",
-   // STATS: "Stats",
-
-   isValid(page)
-   {
-      if (
-         page === this.HOME ||
-         page === this.MATERIAL ||
-         page === this.QUIZ
-         // page === this.SETTINGS ||
-         // page === this.STATS
-      ) {
-         return true
-      } else {
-         return false
-      }
-   }
 }
 
 class State {
@@ -29,17 +12,21 @@ class State {
 
    //#region Current Page
 
+   _currentAccount = new Account()
+   get currentAccount() {
+      return this._currentAccount
+   }
+   set currentAccount(data) {
+      this._currentAccount = new Account(data)
+   }
+
    _currentPage
    get currentPage() {
-      if (!pages.isValid(this._currentPage)) {
-         this._currentPage = pages.HOME
-      }
+      if (!this._currentPage) this._currentPage = pages.HOME
       return this._currentPage
    }
    set currentPage(data) {
-      if (pages.isValid(data)) {
-         this._currentPage = data
-      }
+      this._currentPage = data
       this.setLocal()
    }
 
@@ -112,7 +99,7 @@ class State {
       this._accountSubjects = data.length ? data : []
       let unsetSelectedSubjectId = true
       this._accountSubjects.forEach(subject => {
-         subject.focusTopicIds = JSON.parse(subject.focusTopicIds)
+         // subject.focusTopicIds = JSON.parse(subject.focusTopicIds)
          if (subject.id == this._selectedSubjectId) unsetSelectedSubjectId = false
       });
       if (unsetSelectedSubjectId) this.selectedSubjectId = 0
@@ -384,27 +371,4 @@ class State {
    }
 
    //#endregion
-}
-
-class Quiz {
-   constructor(data = {})
-   {
-      if (!data) data = {}
-      this.id = data.hasOwnProperty('id') ? data.id : 0
-      this.completeDateUTC = data.hasOwnProperty('completeDateUTC') ? data.completeDateUTC : null
-
-      this.allQuestionIds = data.hasOwnProperty('allQuestionIds') ? data.allQuestionIds : []
-      if (typeof this.allQuestionIds == 'string') {
-         this.allQuestionIds = JSON.parse(this.allQuestionIds)
-      } else if (this.allQuestionIds == null) {
-         this.allQuestionIds = []
-      }
-
-      this.answeredQuestionIds = data.hasOwnProperty('answeredQuestionIds') ? data.answeredQuestionIds : []
-      if (typeof this.answeredQuestionIds == 'string') {
-         this.answeredQuestionIds = JSON.parse(this.answeredQuestionIds)
-      } else if (this.answeredQuestionIds == null) {
-         this.answeredQuestionIds = []
-      }
-   }
 }

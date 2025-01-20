@@ -164,7 +164,7 @@ page = {
       let data = app.processApiResponse(response)
       state.quiz = data
       state.question = { id: 0, shortPhrase: null , phrase: null, answer: null }
-      if (state.quiz.completeDateUTC !== null) {
+      if (state.quiz.completeDate !== null) {
          await this.loadQuizResults()
       } else {
          await app.route()

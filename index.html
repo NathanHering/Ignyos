@@ -1,28 +1,26 @@
 <!DOCTYPE htlm>
 <html lang="en">
+    <title>Ignyos</title>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="shortcut icon" href="./Favicon.png" type="image/x-icon" />
 
         <link async rel="stylesheet" href="./site.css">
+        <script src="./scripts/helpers.js"></script>
+        <script src="./scripts/dataModels.js"></script>
         <script src="./scripts/app.js"></script>
+        <script src="./scripts/indexedDb.js"></script>
         <script src="./scripts/state.js"></script>
-        
-        <!--Funtility auth-->
-        <link async rel="stylesheet" href="https://funtility.github.io/identity/ui.css">
-        <script src="https://funtility.github.io/identity/ui.js"></script>
-        <script src="https://funtility.github.io/identity/api.js"></script>
     </head>
     <body>
     </body>
     <script>
-        let state, api, app, page
-        const appName = 'Ignyos'
+        let state, app, page
         window.onload = async () => {
-            state = new State("Ignyos:Portal")
-            api = window.location.host ? new FuntilityAPI(appName) : new FuntilityAPI(appName, 'http://localhost:5194/')
-            app = new App(appName)
+            await ensureDbReady()
+            state = new State("Ignyos.Funtility")
+            app = new App()
         }
     </script>
 </html>

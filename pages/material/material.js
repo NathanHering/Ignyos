@@ -18,9 +18,9 @@ page = {
    
    async loadSubjects()
    {
-      let response = await api.GET("ignyos/Subject/List")
-      let data = app.processApiResponse(response)
-      state.accountSubjects = data
+      // let response = await api.GET("ignyos/Subject/List")
+      // let data = app.processApiResponse(response)
+      state.accountSubjects = await dbCtx.accountSubject.list(state.currentAccount.id)
       this.populateSubjectList()
    },
 
@@ -30,10 +30,8 @@ page = {
       page.appendChild(this.subjectPane)
       if (reload) {
          await this.loadSubjects()
-         this.populateSubjectList()
-      } else {
-         this.populateSubjectList()
       }
+      this.populateSubjectList()
    },
 
    get subjectPane() {
@@ -95,10 +93,14 @@ page = {
    async createNewSubject() {
       let val = document.getElementById('new-subject').value.trim()
       if (val == '') return
-      state.clearTOpi
-      let response = await api.POST('ignyos/subject', { title: val })
-      let data = app.processApiResponse(response)
-      state.addNewAccountSubject(data)
+      // let response = await api.POST('ignyos/subject', { title: val })
+      // let data = app.processApiResponse(response)
+      let newSubject = new Subject({title: val})
+      let newAcctSub = new AccountSubject({accountId: state.currentAccount.id, subjectId: newSubject.id})
+      let subListItem = new SubjectListItem(newAcctSub,newSubject)
+      await dbCtx.subject.add(newSubject)
+      await dbCtx.accountSubject.add(newAcctSub)
+      state.addNewAccountSubject(subListItem)
       await this.refreshSubjectPane(true)
       await this.refreshTopicPane()
       await this.refreshQuestionPane()
@@ -172,9 +174,13 @@ page = {
    },
 
    async deleteSubject(subject) {
-      let response = await api.GET('ignyos/subject/delete', [["id",subject.id]])
-      let data = app.processApiResponse(response)
-      if (data) state.deleteAccountSubject(subject.id)
+      // let response = await api.GET('ignyos/subject/delete', [["id",subject.id]])
+      // let data = app.processApiResponse(response)
+      // if (data) state.deleteAccountSubject(subject.id)
+      subject.deletedDate = new Date().toISOString()
+      await dbCtx.subject.update(subject)
+      await dbCtx.accountSubject.delete(state.currentAccount.id,subject.id)
+      state.deleteAccountSubject(subject.id)
       await this.refreshSubjectPane()
       await this.refreshTopicPane()
       await this.refreshQuestionPane()
@@ -221,9 +227,8 @@ page = {
       let val = document.getElementById('edit-subject').value.trim()
       if (val == '') return
       subject.title = val
-      let response = await api.POST('ignyos/subject/update', subject)
-      let data = app.processApiResponse(response)
-      if (data === true) {
+      if (await dbCtx.subject.update(subject))
+      {
          state.updateAccountSubject(subject)
          await this.refreshSubjectPane()
          await this.refreshTopicPane()
@@ -241,9 +246,10 @@ page = {
          state.selectedTopicId = 0
          state.topics = []
       } else {
-         let response = await api.GET("ignyos/Topic/List",[['subjectId',state.selectedSubjectId]])
-         let data = app.processApiResponse(response)
-         state.topics = data
+         // let response = await api.GET("ignyos/Topic/List",[['subjectId',state.selectedSubjectId]])
+         // let data = app.processApiResponse(response)
+         // state.topics = data
+         state.topics = await dbCtx.topic.all(state.selectedSubjectId)
          this.populateTopicList()
       }
    },
@@ -316,9 +322,11 @@ page = {
    async createTopic() {
       let val = document.getElementById('new-topic').value.trim()
       if (val == '') return
-      let response = await api.POST('ignyos/topic', { subjectId: state.selectedSubjectId, title: val })
-      let data = app.processApiResponse(response)
-      state.addNewTopic(data)
+      // let response = await api.POST('ignyos/topic', { subjectId: state.selectedSubjectId, title: val })
+      // let data = app.processApiResponse(response)
+      let newTopic = new Topic({subjectId: state.selectedSubjectId, title: val})
+      await dbCtx.topic.add(newTopic)
+      state.addNewTopic(newTopic)
       this.refreshTopicPane()
       this.refreshQuestionPane()
    },
@@ -332,6 +340,7 @@ page = {
 
    populateTopicList() {
       let topicList = document.getElementById('topic-list')
+      if (!topicList) return
       topicList.innerHTML = null
       topicList.classList.remove('v-loading')
       state.topics.forEach(topic => {
@@ -373,12 +382,18 @@ page = {
       ele.addEventListener('click', async (event) => {
          event.stopImmediatePropagation()
          state.toggleFocusTopic(topic.id)
-         let body = {
-            accountId: null,
+         let acctSub = {
+            accountId: state.currentAccount.id,
             subjectId: state.selectedSubjectId,
-            focusTopicIds: JSON.stringify(state.selectedSubject.focusTopicIds)
+            focusTopicIds: state.selectedSubject.focusTopicIds
          }
-         await api.POST('ignyos/subject/focus',body)
+         await dbCtx.accountSubject.update(acctSub)
+         // let body = {
+         //    accountId: null,
+         //    subjectId: state.selectedSubjectId,
+         //    focusTopicIds: JSON.stringify(state.selectedSubject.focusTopicIds)
+         // }
+         // await api.POST('ignyos/subject/focus',body)
          await this.refreshSubjectPane()
          await this.refreshTopicPane()
       })
@@ -409,19 +424,30 @@ page = {
    },
 
    async deleteTopic(topic) {
-      let response = await api.GET('ignyos/Topic/Delete', [["id",topic.id]])
-      let data = app.processApiResponse(response)
-      if (data) {
+      topic.deletedDate = new Date().toISOString()
+      if (await dbCtx.topic.update(topic)) {
          if (state.deleteTopic(topic)) {
-            let body = {
-               accountId: null,
+            let acctSub = {
+               accountId: state.currentAccount.id,
                subjectId: state.selectedSubjectId,
-               focusTopicIds: JSON.stringify(state.selectedSubject.focusTopicIds)
+               focusTopicIds: state.selectedSubject.focusTopicIds
             }
-            await api.POST('ignyos/subject/focus',body)
-            this.refreshSubjectPane()
+            await dbCtx.accountSubject.update(acctSub)
          }
       }
+      // let response = await api.GET('ignyos/Topic/Delete', [["id",topic.id]])
+      // let data = app.processApiResponse(response)
+      // if (data) {
+      //    if (state.deleteTopic(topic)) {
+      //       let body = {
+      //          accountId: null,
+      //          subjectId: state.selectedSubjectId,
+      //          focusTopicIds: JSON.stringify(state.selectedSubject.focusTopicIds)
+      //       }
+      //       await api.POST('ignyos/subject/focus',body)
+      //       this.refreshSubjectPane()
+      //    }
+      // }
       this.refreshTopicPane()
       this.refreshQuestionPane()
    },
@@ -468,9 +494,10 @@ page = {
       if (val == '') return
       topic.subjectId = state.selectedSubjectId
       topic.title = val
-      let response = await api.POST('ignyos/topic/update', topic)
-      let data = app.processApiResponse(response)
-      state.updateTopic(data)
+      // let response = await api.POST('ignyos/topic/update', topic)
+      // let data = app.processApiResponse(response)
+      await dbCtx.topic.update(topic)
+      state.updateTopic(topic)
       this.refreshTopicPane(true)
    },
 
@@ -484,9 +511,10 @@ page = {
          state.selectedQuestionId = 0
          state.questions = []
       } else {
-         let response = await api.GET("ignyos/Question/List",[['topicId',state.selectedTopicId]])
-         let data = app.processApiResponse(response)
-         state.questions = data
+         state.questions = await dbCtx.question.all(state.selectedTopicId)
+         // let response = await api.GET("ignyos/Question/List",[['topicId',state.selectedTopicId]])
+         // let data = app.processApiResponse(response)
+         // state.questions = data
          this.populateQuestionList()
       }
    },
@@ -623,9 +651,13 @@ page = {
    },
 
    async deleteQuestion(question) {
-      let response = await api.GET('ignyos/question/delete', [["id",question.id]])
-      let data = app.processApiResponse(response)
-      if (data) state.deleteQuestion(question)
+      // let response = await api.GET('ignyos/question/delete', [["id",question.id]])
+      // let data = app.processApiResponse(response)
+      // if (data) state.deleteQuestion(question)
+      question.deletedDate = new Date().toISOString()
+      if (await dbCtx.question.update(question)) {
+         state.deleteQuestion(question)
+      }
       this.refreshQuestionPane(true)
    },
 
@@ -646,9 +678,15 @@ page = {
          let val = document.getElementById('new-question').value.trim()
          state.question = { shortPhrase: val }
       } else {
-         let response = await api.GET("ignyos/Question",[['id',state.selectedQuestionId]])
-         let data = app.processApiResponse(response)
-         state.question = data
+         let question = await dbCtx.question.get(state.selectedQuestionId)
+         if (question) {
+            state.question = question
+         } else {
+            app.messageCenter.addError('The selected question could not be found.')
+         }
+         // let response = await api.GET("ignyos/Question",[['id',state.selectedQuestionId]])
+         // let data = app.processApiResponse(response)
+         // state.question = data
       }
       document.getElementById('new-question').value = ''
    },
@@ -713,15 +751,24 @@ page = {
       let form = this.questionForm
       if (form.isValid())
       {
-         let response
+         // let response
          if (form.id == 0) {
-            response = await api.POST("ignyos/Question", form)
-            let data = app.processApiResponse(response)
-            state.addQuestion(data)
+            let newQuestion = new Question(form)
+            while (dbCtx.question.exists(newQuestion)) {
+               newQuestion = new Question(form)
+            }
+            await dbCtx.question.add(newQuestion)
+            state.addQuestion(newQuestion)
+            // response = await api.POST("ignyos/Question", form)
+            // let data = app.processApiResponse(response)
+            // state.addQuestion(data)
          } else {
-            response = await api.POST("ignyos/Question/Update", form)
-            let data = app.processApiResponse(response)
-            state.updateQuestion(data)
+            let updatedQuestion = new Question(form)
+            await dbCtx.question.update(updatedQuestion)
+            state.updateQuestion(updatedQuestion)
+            // response = await api.POST("ignyos/Question/Update", form)
+            // let data = app.processApiResponse(response)
+            // state.updateQuestion(data)
          }
          this.refreshQuestionPane(true)
          document.getElementById('site-header').classList.remove('blur')
@@ -731,9 +778,9 @@ page = {
    },
 
    get questionForm() {
-      let shortPhrase = document.getElementById('short-phrase').value.trim()
-      let phrase = document.getElementById('phrase').value.trim()
-      let answer = document.getElementById('answer').value.trim()
+      let shortPhrase = document.getElementById('short-phrase')?.value.trim()
+      let phrase = document.getElementById('phrase')?.value.trim()
+      let answer = document.getElementById('answer')?.value.trim()
 
       let isValid = () => {
          let result = true
@@ -754,10 +801,10 @@ page = {
 
       return {
          'id': state.selectedQuestionId,
+         'topicId': state.selectedTopicId,
          'shortPhrase': shortPhrase,
          'phrase': phrase,
          'answer': answer,
-         'topicId': state.selectedTopicId,
          'isValid': isValid
       }
    },

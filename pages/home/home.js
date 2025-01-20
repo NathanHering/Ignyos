@@ -5,5 +5,5 @@ page = {
       ele.innerText = "Welcome to Ignyos. Here's some information about the site."
       return ele
    },
-   load() {}
+   load() {console.log('home page loaded')}
 }
