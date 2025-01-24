@@ -15,28 +15,27 @@ const request = indexedDB.open("ignyos.funtility", 1);
 request.onupgradeneeded = function(event) {
    db = event.target.result;
 
-   const accountStore = db.createObjectStore("account", { keyPath: "id" });
+   const accountStore = db.createObjectStore(stores.ACCOUNT, { keyPath: "id" });
    accountStore.createIndex("name", "name", { unique: true });
 
-   const accountSubjectStore = db.createObjectStore("accountSubject", { keyPath: "subjectId" });
+   const accountSubjectStore = db.createObjectStore(stores.ACCOUNT_SUBJECT, { keyPath: "subjectId" });
    accountSubjectStore.createIndex("accountId", "accountId", { unique: false });
 
-   const metaDataStore = db.createObjectStore("metaData", { keyPath: "id" });
-   metaDataStore.add({ id: 1, selectedAccountId: 0 });
+   const metaDataStore = db.createObjectStore(stores.METADATA, { keyPath: "id" });
+   metaDataStore.add({ id: 1, selectedAccountId: '' });
 
-   const questionStore = db.createObjectStore("question", { keyPath: "id" });
+   const questionStore = db.createObjectStore(stores.QUESTION, { keyPath: "id" });
    questionStore.createIndex("topicId", "topicId", { unique: false });
 
-   const questionAnswerStore = db.createObjectStore("questionAnswer", { keyPath: "id" });
-   questionAnswerStore.createIndex("quizId", "quizId", { unique: false });
+   const questionAnswerStore = db.createObjectStore(stores.QUESTION_ANSWER, { keyPath: "id" });
+   questionAnswerStore.createIndex("compsiteIndex", ["accountId", "quizId"], { unique: false });
 
-   const quizStore = db.createObjectStore("quiz", { keyPath: "id" });
+   const quizStore = db.createObjectStore(stores.QUIZ, { keyPath: "id" });
    quizStore.createIndex("accountId", "accountId", { unique: false });
 
-   const subjectStore = db.createObjectStore("subject", { keyPath: "id" });
-   subjectStore.createIndex("accountId", "accountId", { unique: false });
+   const subjectStore = db.createObjectStore(stores.SUBJECT, { keyPath: "id" });
 
-   const topicStore = db.createObjectStore("topic", { keyPath: "id" });
+   const topicStore = db.createObjectStore(stores.TOPIC, { keyPath: "id" });
    topicStore.createIndex("subjectId", "subjectId", { unique: false });
 };
 
@@ -45,7 +44,7 @@ request.onsuccess = function(event) {
 };
 
 request.onerror = function(event) {
-  console.log("Database error: ", event.target.errorCode);
+  console.error("Database error: ", event.target.errorCode);
 };
 
 function getObjectStore(storeName, mode) {
@@ -70,7 +69,7 @@ function ensureDbReady() {
 
 const dbCtx = {
    account: {
-      byName(name) {
+      async byName(name) {
          try {
             const store = getObjectStore(stores.ACCOUNT, "readonly");
             const index = store.index("name");
@@ -115,6 +114,27 @@ const dbCtx = {
             });
          } catch (error) {
             console.error(error);
+         }
+      },
+      async byId(id) {
+         try {
+            const store = getObjectStore(stores.ACCOUNT, "readonly");
+            const request = store.get(id);
+
+            return new Promise((resolve, reject) => {
+               request.onsuccess = function(event) {
+                  if (event.target.result) {
+                     resolve(event.target.result);
+                  } else {
+                     reject("Account not found");
+                  }
+               };
+               request.onerror = function(event) {
+                  reject("Account not found");
+               };
+            });
+         } catch (error) {
+            console.error(error)
          }
       },
       async current() {
@@ -264,7 +284,6 @@ const dbCtx = {
          }
       },
       async update(accountSubject) {
-         console.log("Updating account subject", accountSubject);
          try {
             const store = getObjectStore(stores.ACCOUNT_SUBJECT, "readwrite");
             const request = store.put(accountSubject);
@@ -289,7 +308,6 @@ const dbCtx = {
        * @returns 
        */
       async delete(accountId, subjectId) {
-         // console.log("Deleting account subject", accountId, subjectId);
          try {
             const store = getObjectStore(stores.ACCOUNT_SUBJECT, "readwrite");
             const index = store.index("accountId");
@@ -320,6 +338,42 @@ const dbCtx = {
       }
    },
    metadata: {
+      async get() {
+         try {
+            const store = getObjectStore(stores.METADATA, "readonly");
+            const request = store.get(1);
+
+            return await new Promise((resolve, reject) => {
+               request.onsuccess = function(event) {
+                  resolve(event.target.result);
+               };
+
+               request.onerror = function(event) {
+                  reject("Metadata not found");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+         }
+      },
+      async set(data) {
+         try {
+            const store = getObjectStore(stores.METADATA, "readwrite");
+            const request = store.put(data);
+
+            return new Promise((resolve, reject) => {
+               request.onsuccess = function(event) {
+                  resolve();
+               };
+
+               request.onerror = function(event) {
+                  reject("Metadata not updated");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+         }
+      },
       /**
        * Gets the MetaData from the metadata store, then updates the selected account id.
        * @param {*} accountId The account id to set as the selected account.
@@ -327,7 +381,6 @@ const dbCtx = {
        */
       async setSelectedAccountId(accountId) {
          try {
-            await ensureDbReady();
             const store = getObjectStore(stores.METADATA, "readwrite");
             const request = store.get(1);
 
@@ -347,7 +400,7 @@ const dbCtx = {
        * @param {*} topicId 
        * @returns 
        */
-      async all(topicId) {
+      async byTopicId(topicId) {
          try {
             const store = getObjectStore(stores.QUESTION, "readonly");
             const index = store.index("topicId");
@@ -355,7 +408,7 @@ const dbCtx = {
 
             return await new Promise((resolve, reject) => {
                request.onsuccess = function(event) {
-                  resolve(event.target.result.filter(question => !question.deletedDate));
+                  resolve(event.target.result.filter(question => !question.deletedDate).sort((a, b) => a.shortPhrase.localeCompare(b.shortPhrase)));
                };
 
                request.onerror = function(event) {
@@ -374,7 +427,11 @@ const dbCtx = {
 
             return await new Promise((resolve, reject) => {
                request.onsuccess = function(event) {
-                  resolve(event.target.result);
+                  if (event.target.result === undefined) {
+                     resolve(false);
+                  } else {
+                     resolve(event.target.result);
+                  }
                };
 
                request.onerror = function(event) {
@@ -386,9 +443,30 @@ const dbCtx = {
             return new Question();
          }
       },
+      async byIdArray(ids) {
+         try {
+            const store = getObjectStore(stores.QUESTION, "readonly");
+            const request = store.getAll();
+
+            return await new Promise((resolve, reject) => {
+               request.onsuccess = function(event) {
+                  const questions = event.target.result;
+                  resolve(questions.filter(question => ids.includes(question.id)));
+               };
+
+               request.onerror = function(event) {
+                  resolve([]);
+               };
+            });
+         } catch (error) {
+            console.error(error);
+            return [];
+         }
+      },
       async exists(id) {
          try {
-            return await this.get(id) ? true : false;
+            const resp = await this.get(id);
+            return resp === false ? false : true;
          } catch (error) {
             return false;
          }
@@ -431,6 +509,27 @@ const dbCtx = {
          }
       }
    },
+   questionAnswer: {
+      async add(answer) {
+         console.log(JSON.stringify(answer));
+         try {
+            const store = getObjectStore(stores.QUESTION_ANSWER, "readwrite");
+            const request = store.add(answer);
+
+            return new Promise((resolve, reject) => {
+               request.onsuccess = function(event) {
+                  resolve();
+               };
+
+               request.onerror = function(event) {
+                  reject("Answer not added");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+         }
+      }
+   },
    quiz: {
       /**
        * Get the currently open quiz that matches the user account id and has not been completed.
@@ -444,7 +543,7 @@ const dbCtx = {
             const index = store.index("accountId");
             const request = index.get(acctId);
 
-            return await new Promise((resolve, reject) => {
+            return new Promise((resolve, reject) => {
                request.onsuccess = function(event) {
                   const quiz = event.target.result;
                   if (quiz && !quiz.completeDate) {
@@ -461,6 +560,238 @@ const dbCtx = {
          } catch (error) {
             console.error(error);
             return false;
+         }
+      },
+      async create(acctId, questionCount) {
+         try {
+            const result = new Quiz({ accountId: acctId });
+            const focusTopicIds = await this.focusTopicIds(acctId);
+            const questionIds = await this.questionIds(focusTopicIds);
+            const answeredQuestions = await this.answeredQuestions(acctId, questionIds);
+            const unansweredQuestionIds = this.unansweredQuestionIds(questionIds, answeredQuestions);
+
+            let quizQuestionIds;
+            if (unansweredQuestionIds.length > questionCount - 1) {
+               quizQuestionIds = getRandomNElements(unansweredQuestionIds, questionCount);
+            } else {
+               const n = questionCount - unansweredQuestionIds.length;
+               const questionIdsInMostNeedOfStudy = this.questionIdsInMostNeedOfStudy(n, answeredQuestions);
+               quizQuestionIds = unansweredQuestionIds.concat(questionIdsInMostNeedOfStudy);
+            }
+
+            if (quizQuestionIds.length === 0) {
+               return false;
+            } else {
+               result.allQuestionIds = quizQuestionIds;
+               await this.add(result);
+               return result;
+            }
+         } catch (error) {
+            console.error(error);
+            return false;
+         }
+      },
+      async focusTopicIds(acctId) {
+         try {
+            const accountSubjects = await dbCtx.accountSubject.all(acctId);
+            // combine all the focusTopicIds from the accountSubjects
+            return accountSubjects.reduce((acc, curr) => acc.concat(curr.focusTopicIds), []);
+         } catch (error) {
+            console.error(error);
+            return [];
+         }
+      },
+      async questionIds(focusTopicIds) {
+         try {
+            const store = getObjectStore(stores.QUESTION, "readonly");
+            const request = store.getAll();
+
+            return await new Promise((resolve, reject) => {
+               request.onsuccess = function(event) {
+                  const questions = event.target.result;
+                  resolve(questions
+                     .filter(question => focusTopicIds
+                        .includes(question.topicId) 
+                        && question.deletedDate === null)
+                     .map(question => question.id)
+                  );
+               };
+
+               request.onerror = function(event) {
+                  reject("Questions not found");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+            return [];
+         }
+      },
+      async answeredQuestions(acctId, questionIds) {
+         try {
+         const store = getObjectStore(stores.QUESTION_ANSWER, "readonly");
+         const index = store.index("compsiteIndex");
+
+            return await new Promise((resolve, reject) => {
+               const answers = [];
+               const request = index.openCursor();
+
+               request.onsuccess = function(event) {
+                  const cursor = event.target.result;
+                  if (cursor) {
+                     const answer = cursor.value;
+                     if (answer.accountId === acctId && questionIds.includes(answer.questionId)) {
+                        answers.push(answer);
+                     }
+                     cursor.continue();
+                  } else {
+                     resolve(answers);
+                  }
+               };
+
+               request.onerror = function(event) {
+                  reject("Answers not found");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+            return [];
+         }
+      },
+      unansweredQuestionIds(questionIds, answeredQuestions) {
+         return questionIds
+            .filter(questionId => !answeredQuestions
+               .some(answer => answer.questionId === questionId));
+      },
+      questionIdsInMostNeedOfStudy(count, answeredQuestions) {
+         if (answeredQuestions.length === 0) { return []; }
+         answeredQuestions.sort((a, b) => {
+            return a.id.localeCompare(b.id);
+         });
+         const distinctQuestionIds = [...new Set(answeredQuestions.map(answer => answer.questionId))];
+         let stackRank = [];// two dimentiional array
+         distinctQuestionIds.forEach(questionId => {
+            const answers = answeredQuestions.filter(answer => answer.questionId === questionId);
+            stackRank.push([questionId, this.getWeight(answers)]);
+         });
+         let sorted = stackRank.sort((a, b) => {
+            return a[1] - b[1];
+         });
+         if (count < sorted.length) {
+            return sorted.slice(0, count).map(item => item[0]);
+         } else {
+            return sorted.map(item => item[0]);
+         }
+      },
+      getWeight(answeredQuestions) {
+         const allTimeCount = answeredQuestions.length;
+         const allTimeCorrect = answeredQuestions.filter(answer => answer.answeredCorrectly).length;
+         const allTimeAvg = allTimeCorrect / allTimeCount;
+
+         let lastThreeCorrect = 0;
+         let lastThreeAvg = 0;
+         if (allTimeCount > 2) {
+            const lastThree = answeredQuestions.slice(allTimeCount - 3);
+            lastThreeCorrect = lastThree.filter(answer => answer.answeredCorrectly).length;
+            lastThreeAvg = lastThreeCorrect / 3;
+         } else {
+            lastThreeCorrect = answeredQuestions.filter(answer => answer.answeredCorrectly).length;
+            lastThreeAvg = lastThreeCorrect / 3;
+         }
+      },
+      async add(quiz) {
+         try {
+            const store = getObjectStore(stores.QUIZ, "readwrite");
+            const request = store.add(quiz);
+
+            return new Promise((resolve, reject) => {
+               request.onsuccess = function(event) {
+                  resolve();
+               };
+
+               request.onerror = function(event) {
+                  reject("Quiz not added");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+         }
+      },
+      async update(quiz) {
+         try {
+            const store = getObjectStore(stores.QUIZ, "readwrite");
+            const request = store.put(quiz);
+
+            return new Promise((resolve, reject) => {
+               request.onsuccess = function(event) {
+                  resolve();
+               };
+
+               request.onerror = function(event) {
+                  reject("Quiz not updated");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+         }
+      },
+      async quit(acctId, quizId) {
+         try {
+            const store = getObjectStore(stores.QUIZ, "readwrite");
+            const request = store.get(quizId);
+
+            return new Promise((resolve, reject) => {
+               request.onsuccess = function(event) {
+                  const quiz = event.target.result;
+                  if (quiz && quiz.accountId === acctId) {
+                     quiz.completeDate = new Date().toISOString();
+                     store.put(quiz);
+                     resolve();
+                  } else {
+                     resolve(false);
+                  }
+               };
+
+               request.onerror = function(event) {
+                  reject("Quiz not found");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+         }
+      },
+      /**
+       * Finds all the QuestionAnswers for the given account id and quiz id. Then finds all the questions
+       * based on the question ids from the QuestionAnswers. Then creates a QuestionListItem object for each
+       * question and answer. Then returns the collection of QuestionListItem objects.
+       * @param {string} accountId 
+       * @param {string} quizId 
+       * @returns {QuestionListItem[]}
+       */
+      async results(accountId, quizId) {
+         try {
+            const store = getObjectStore(stores.QUESTION_ANSWER, "readonly");
+            const index = store.index("compsiteIndex");
+            const request = index.getAll(IDBKeyRange.bound([accountId, quizId], [accountId, quizId]));
+
+            return await new Promise((resolve, reject) => {
+               request.onsuccess = async function(event) {
+                  const answers = event.target.result;
+                  const questionIds = answers.map(answer => answer.questionId);
+                  const questions = await dbCtx.question.byIdArray(questionIds);
+                  const results = questions.map(question => {
+                     const answer = answers.find(answer => answer.questionId === question.id);
+                     return new QuestionListItem(question, answer);
+                  });
+                  resolve(results);
+               };
+
+               request.onerror = function(event) {
+                  reject("Answers not found");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+            return [];
          }
       }
    },

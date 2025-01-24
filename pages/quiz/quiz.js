@@ -35,8 +35,9 @@ page = {
       pane.innerHTML = null
       document.getElementById('nav').innerHTML = null
       
-      let response = await api.GET('ignyos/quiz/results',[['id',state.quiz.id]])
-      let questions = app.processApiResponse(response)
+      // let response = await api.GET('ignyos/quiz/results',[['id',state.quiz.id]])
+      // let questions = app.processApiResponse(response)
+      let questions = await dbCtx.quiz.results(state.currentAccount.id, state.quiz.id)
       
       pane.appendChild(this.getSummaryEle(questions))
       pane.appendChild(this.getQuestionList(questions))
@@ -95,9 +96,10 @@ page = {
       let q = document.getElementById('question')
       q.classList.add('v-loading')
       let id = state.getNextQuestionId()
-      let response = await api.GET('ignyos/question',[['id', id]])
-      let data = app.processApiResponse(response)
-      state.question = data
+      state.question = await dbCtx.question.get(id)
+      // let response = await api.GET('ignyos/question',[['id', id]])
+      // let data = app.processApiResponse(response)
+      // state.question = data
       q.classList.remove('v-loading')
       q.innerText = state.question.phrase
    },
@@ -155,14 +157,18 @@ page = {
    },
 
    async submitAnswer(correct) {
-      let body = {
+      let questionAnswer = new QuestionAnswer({
+         accountId: state.currentAccount.id,
          questionId: state.question.id,
          quizId: state.quiz.id,
          answeredCorrectly: correct
-      }
-      let response = await api.POST('ignyos/quiz/answer',body)
-      let data = app.processApiResponse(response)
-      state.quiz = data
+      })
+      // let response = await api.POST('ignyos/quiz/answer',body)
+      // let data = app.processApiResponse(response)
+      // state.quiz = data
+      await dbCtx.questionAnswer.add(questionAnswer)
+      state.updateAnsweredQuestionIds(state.question.id)
+      await dbCtx.quiz.update(state.quiz)
       state.question = { id: 0, shortPhrase: null , phrase: null, answer: null }
       if (state.quiz.completeDate !== null) {
          await this.loadQuizResults()
@@ -175,14 +181,14 @@ page = {
 
    async quitQuiz() {
       app.confirm(async () => {
-         let response = await api.POST('ignyos/quiz/quit',state.quiz.id)
-         let data = app.processApiResponse(response)
+         await dbCtx.quiz.quit(state.currentAccount.id, state.quiz.id)
+         // let response = await api.POST('ignyos/quiz/quit',state.quiz.id)
+         // let data = app.processApiResponse(response)
+         state.quiz = {id: 0, startDateUTC: null, allQuestionIds: [], answeredQuestionIds: []}
          if (data == false) {
-            state.quiz = {id: 0, startDateUTC: null, allQuestionIds: [], answeredQuestionIds: []}
             messageCenter.addInfo('There may have been an error while quitting this quiz.')
             setTimeout(async () => { await app.route() },5000)
          } else {
-            state.quiz = {id: 0, startDateUTC: null, allQuestionIds: [], answeredQuestionIds: []}
             await app.route()
          }},
          'Really?\n\nYou want to quit?')

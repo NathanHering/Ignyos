@@ -1,6 +1,5 @@
 class App {
    constructor() {
-      document.head.appendChild(this.title)
       this.route()
    }
 
@@ -11,13 +10,14 @@ class App {
       await this.initSiteHeader()
       if (state.currentAccount.name !== '') {
          await this.updateAccountLastUsed()
-         state.currentPage = pages.MATERIAL
+         state.currentPage = pages.FLASH_CARDS
          const q = await dbCtx.quiz.open(state.currentAccount.id)
          if (q) {
             state.quiz = q
             state.currentPage = pages.QUIZ
          }
       }
+      this.initNav()
       await this.loadPage()
    }
 
@@ -26,9 +26,7 @@ class App {
       if (siteHeader)
       {
          siteHeader.remove()
-         // console.log('removed SiteHeader')
       }
-      
       document.body.appendChild(await new SiteHeader().getElement())
    }
 
@@ -112,7 +110,7 @@ class App {
       const result = {}
       result[pages.HOME] = 0;
       result[pages.QUIZ] = 0;
-      result[pages.MATERIAL] = 0;
+      result[pages.FLASH_CARDS] = 0;
       return result
    }
 
@@ -124,6 +122,7 @@ class App {
       this.hideModal()
       let bg = document.createElement('div')
       bg.id = 'modal-bg'
+      bg.classList.add('std-modal-bg')
       bg.addEventListener('click', this.hideModal)
       bg.appendChild(this.getConfirmModal(okFn, message))
       document.body.appendChild(bg)
@@ -179,6 +178,7 @@ class App {
       
       let bg = document.createElement('div')
       bg.id = 'modal-bg'
+      bg.classList.add('std-modal-bg')
       bg.addEventListener('click', this.hideModal)
       bg.appendChild(ele)
       document.body.appendChild(bg)
@@ -235,7 +235,6 @@ class App {
 
 class SiteHeader {
    constructor() {
-      // console.log('SiteHeader')
    }
 
    async getElement()
@@ -283,10 +282,10 @@ class SiteHeader {
       e.classList.add('hidden')
       e.classList.add('menu')
       let ul = document.createElement('ul')
-      let newAcct = this.getMenuItem("New Account")
+      let newAcct = this.getMenuItem("New Student")
       newAcct.addEventListener('click', this.createNewAccount)
       ul.appendChild(newAcct)
-      ul.appendChild(this.getMenuItem("Switch Account" , await this.getAcctSubMenu()))
+      ul.appendChild(this.getMenuItem("Switch Student" , await this.getAcctSubMenu()))
       ul.appendChild(document.createElement('hr'))
       ul.appendChild(this.getMenuItem("Quiz Me!", false))
       e.appendChild(ul)
@@ -375,12 +374,11 @@ class SiteHeader {
          } else {
             messageCenter.addError('Account Name cannot be blank.')
          }
-      }, 'Account Name...');
+      }, "Student's Name...");
       document.getElementById('main-menu').remove();
    }
 
    async switchToAccount(id) {
-      console.log(`Switching to account ${id}`)
       await dbCtx.metadata.setSelectedAccountId(id)
       app.route()
    }
@@ -397,14 +395,14 @@ class SiteHeader {
 navigation = {
    get element() {
       let n = this.nav
-      if (state.quiz.completeDate || state.quiz.id == 0) {
-         n.classList.add('standard')
-         n.appendChild(this.quizBtn)
-      } else {
+      if (state.currentPage == pages.QUIZ) {
          n.classList.add('quiz')
          n.appendChild(this.questionCounter)
          n.appendChild(this.showAnswerBtn)
          n.appendChild(this.quitQuizBtn)
+      } else {
+         n.classList.add('standard')
+         n.appendChild(this.quizBtn)
       }
       return n
    },
@@ -452,9 +450,7 @@ navigation = {
       ele.id = 'create-quiz'
       if (state.currentPage != pages.QUIZ) {
          ele.addEventListener('click', async () => {
-            let response = await api.POST('ignyos/quiz')
-            let data = app.processApiResponse(response)
-            state.quiz = data
+            state.quiz = await dbCtx.quiz.create(state.currentAccount.id, state.currentAccount.settings.defaultQuestionCount)
             state.currentPage = pages.QUIZ
             await app.route()
          })

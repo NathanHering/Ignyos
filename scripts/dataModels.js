@@ -5,6 +5,7 @@ class Account {
       this.lastUsed = Object.hasOwn(data, 'lastUsed') ? data.lastUsed : new Date().toISOString()
       this.name = Object.hasOwn(data, 'name') ? data.name : ''
       this.settings = Object.hasOwn(data, 'settings') ? new AccountSettings(data.settings) : new AccountSettings()
+      this.state = Object.hasOwn(data, 'state') ? new AccountState(data.state) : new AccountState()
    }
 }
 
@@ -17,12 +18,23 @@ class AccountSettings {
    }
 }
 
+class AccountState {
+   constructor(data = {}) {
+      this.currentPage = Object.hasOwn(data, 'currentPage') ? data.currentPage : ''
+      this.currentQuizId = Object.hasOwn(data, 'currentQuizId') ? data.currentQuizId : ''
+      this.selectedSubjectId = Object.hasOwn(data, 'selectedSubjectId') ? data.selectedSubjectId : ''
+   }
+}
+
 class AccountSubject {
    constructor(data = {}) {
-      // this.id = Object.hasOwn(data, 'id') ? data.id : newId(4)
+      // composit key
       this.accountId = Object.hasOwn(data, 'accountId') ? data.accountId : ''
       this.subjectId = Object.hasOwn(data, 'subjectId') ? data.subjectId : ''
+      // meta data
       this.focusTopicIds = Object.hasOwn(data, 'focusTopicIds') ? data.focusTopicIds : []
+      this.selectedTopicId = Object.hasOwn(data, 'selectedTopicId') ? data.selectedTopicId : ''
+      this.selectedQuestionId = Object.hasOwn(data, 'selectedQuestionId') ? data.selectedQuestionId : ''
    }
 }
 
@@ -46,11 +58,10 @@ class Question {
 
 class QuestionAnswer {
    constructor(data = {}) {
-      this.id = Object.hasOwn(data, 'id') ? data.id : newId(4)
-      this.quizId = Object.hasOwn(data, 'quizId') ? data.quizId : ''
+      this.id = Object.hasOwn(data, 'id') ? data.id : new Date().toISOString()
       this.accountId = Object.hasOwn(data, 'accountId') ? data.accountId : ''
+      this.quizId = Object.hasOwn(data, 'quizId') ? data.quizId : ''
       this.questionId = Object.hasOwn(data, 'questionId') ? data.questionId : ''
-      this.answeredDate = Object.hasOwn(data, 'answeredDate') ? data.answeredDate : new Date().toISOString()
       this.answeredCorrectly = Object.hasOwn(data, 'answeredCorrectly') ? data.answeredCorrectly : false
    }
 }
@@ -94,7 +105,19 @@ class SubjectListItem {
    constructor(accountSubject, subject) {
       this.id = subject.id
       this.title = subject.title
+
       this.focusTopicIds = accountSubject.focusTopicIds
+      this.selectedTopicId = accountSubject.selectedTopicId
+      this.selectedQuestionId = accountSubject.selectedQuestionId
+   }
+}
+
+class QuestionListItem {
+   constructor(question, questionAnswer) {
+      if (!question || !questionAnswer || question.id !== questionAnswer.questionId) return
+      this.id = question.id
+      this.shortPhrase = question.shortPhrase
+      this.correct = questionAnswer.answeredCorrectly
    }
 }
 

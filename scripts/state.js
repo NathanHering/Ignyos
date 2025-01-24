@@ -1,7 +1,78 @@
 const pages = {
    HOME: "home",
-   MATERIAL: "material",
+   FLASH_CARDS: "flashcards",
    QUIZ: "quiz",
+   STATS: "stats"
+}
+
+class StateMgr {
+   constructor() {
+      //#sitewide
+      this.metaData;
+      this.accounts;
+      this.account;
+      
+      //#flashcards page
+      this.subjects;
+      this.topics;
+      this.questions;
+
+      //#flashcards & quiz page
+      this.question;
+      
+      //#stats page
+      this.quizes;
+      
+      //#quiz page
+      this.quiz;
+   }
+   async loadSite() {
+      this.metaData = await dbCtx.metadata.get()
+      this.accounts = await dbCtx.accounts.all()
+      if (this.metaData.selectedAccountId) {
+         this.account = await dbCtx.accounts.byId(this.metaData.selectedAccountId)
+         this.clearPageData()
+         await this.loadCurrentPage()
+      } else {
+         this.account = null
+         this.clearPageData()
+      }
+   }
+   async loadCurrentPage() {
+      if (!this.metaData.currentPage) return
+      switch (this.metaData.currentPage) {
+         case pages.HOME:
+            break
+         case pages.FLASH_CARDS:
+            await this.loadFlashcardsPage()
+            break
+         case pages.QUIZ:
+            await this.loadQuizPage()
+            break
+         case pages.STATS:
+            await this.loadStatsPage()
+            break
+         default:
+            break
+      }      
+   }
+   clearPageData() {
+      this.subjects = []
+      this.topics = []
+      this.questions = []
+      this.question = null
+      this.quizes = []
+      this.quiz = null
+   }
+   async loadFlashcardsPage() {
+      this.subjects = await dbCtx.subjects.all()
+      this.topics = await dbCtx.topics.all()
+      this.questions = await dbCtx.questions.all()
+   }
+   async loadQuizPage() {
+      this.quizes = await dbCtx.quizes.all()
+      this.quiz = null
+   }
 }
 
 class State {
@@ -34,19 +105,18 @@ class State {
 
    //#region Quiz
 
-   _quiz = new Quiz()
+   _quiz = false
    get quiz()
    {
-      if (!this._quiz) this._quiz = new Quiz()
       return this._quiz
    }
    set quiz(data)
    {
       if (data) {
-         this._quiz = data ? new Quiz(data) : new Quiz()
-         if (this._quiz.id > 0) this.currentPage = pages.QUIZ
+         this._quiz = new Quiz(data)
+         if (this._quiz.id !== 0) this.currentPage = pages.QUIZ
       } else {
-         this._quiz = new Quiz()
+         this._quiz = false
       }
       this.setLocal()
    }
@@ -58,6 +128,18 @@ class State {
       })
       let i = Math.floor(Math.random() * unanswered.length)
       return unanswered[i]
+   }
+
+   updateAnsweredQuestionIds(id) {
+      let i = this.quiz.answeredQuestionIds.indexOf(id)
+      if (i == -1) {
+         this.quiz.answeredQuestionIds.push(id)
+      }
+      if (this.quiz.answeredQuestionIds.length == this.quiz.allQuestionIds.length) {
+         this.quiz.completeDate = new Date().toISOString()
+      }
+      this.setLocal()
+
    }
 
    //#endregion

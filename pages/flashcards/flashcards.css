@@ -61,7 +61,7 @@
 }
 
 #new-subject {
-   height: 36px;
+   height: 32px;
    border-top-left-radius: 6px;
    font-size: 18px;
    padding-left: 6px;
@@ -187,7 +187,7 @@
 }
 
 #new-topic {
-   height: 36px;
+   height: 32px;
    border-top-left-radius: 6px;
    font-size: 18px;
    padding-left: 6px;
@@ -324,7 +324,7 @@
 }
 
 #new-question {
-   height: 36px;
+   height: 32px;
    border-top-left-radius: 6px;
    font-size: 18px;
    padding-left: 6px;
@@ -429,6 +429,7 @@
    display: grid;
    grid-template-columns: 1fr;
    grid-template-rows: auto 1fr 1fr auto;
+   color: #333;
    row-gap: 6px;
    padding: 6px;
    font-size: 20px;

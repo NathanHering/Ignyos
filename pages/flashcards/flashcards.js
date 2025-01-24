@@ -18,8 +18,6 @@ page = {
    
    async loadSubjects()
    {
-      // let response = await api.GET("ignyos/Subject/List")
-      // let data = app.processApiResponse(response)
       state.accountSubjects = await dbCtx.accountSubject.list(state.currentAccount.id)
       this.populateSubjectList()
    },
@@ -93,8 +91,6 @@ page = {
    async createNewSubject() {
       let val = document.getElementById('new-subject').value.trim()
       if (val == '') return
-      // let response = await api.POST('ignyos/subject', { title: val })
-      // let data = app.processApiResponse(response)
       let newSubject = new Subject({title: val})
       let newAcctSub = new AccountSubject({accountId: state.currentAccount.id, subjectId: newSubject.id})
       let subListItem = new SubjectListItem(newAcctSub,newSubject)
@@ -174,9 +170,6 @@ page = {
    },
 
    async deleteSubject(subject) {
-      // let response = await api.GET('ignyos/subject/delete', [["id",subject.id]])
-      // let data = app.processApiResponse(response)
-      // if (data) state.deleteAccountSubject(subject.id)
       subject.deletedDate = new Date().toISOString()
       await dbCtx.subject.update(subject)
       await dbCtx.accountSubject.delete(state.currentAccount.id,subject.id)
@@ -246,9 +239,6 @@ page = {
          state.selectedTopicId = 0
          state.topics = []
       } else {
-         // let response = await api.GET("ignyos/Topic/List",[['subjectId',state.selectedSubjectId]])
-         // let data = app.processApiResponse(response)
-         // state.topics = data
          state.topics = await dbCtx.topic.all(state.selectedSubjectId)
          this.populateTopicList()
       }
@@ -322,8 +312,6 @@ page = {
    async createTopic() {
       let val = document.getElementById('new-topic').value.trim()
       if (val == '') return
-      // let response = await api.POST('ignyos/topic', { subjectId: state.selectedSubjectId, title: val })
-      // let data = app.processApiResponse(response)
       let newTopic = new Topic({subjectId: state.selectedSubjectId, title: val})
       await dbCtx.topic.add(newTopic)
       state.addNewTopic(newTopic)
@@ -388,12 +376,6 @@ page = {
             focusTopicIds: state.selectedSubject.focusTopicIds
          }
          await dbCtx.accountSubject.update(acctSub)
-         // let body = {
-         //    accountId: null,
-         //    subjectId: state.selectedSubjectId,
-         //    focusTopicIds: JSON.stringify(state.selectedSubject.focusTopicIds)
-         // }
-         // await api.POST('ignyos/subject/focus',body)
          await this.refreshSubjectPane()
          await this.refreshTopicPane()
       })
@@ -435,19 +417,6 @@ page = {
             await dbCtx.accountSubject.update(acctSub)
          }
       }
-      // let response = await api.GET('ignyos/Topic/Delete', [["id",topic.id]])
-      // let data = app.processApiResponse(response)
-      // if (data) {
-      //    if (state.deleteTopic(topic)) {
-      //       let body = {
-      //          accountId: null,
-      //          subjectId: state.selectedSubjectId,
-      //          focusTopicIds: JSON.stringify(state.selectedSubject.focusTopicIds)
-      //       }
-      //       await api.POST('ignyos/subject/focus',body)
-      //       this.refreshSubjectPane()
-      //    }
-      // }
       this.refreshTopicPane()
       this.refreshQuestionPane()
    },
@@ -494,8 +463,6 @@ page = {
       if (val == '') return
       topic.subjectId = state.selectedSubjectId
       topic.title = val
-      // let response = await api.POST('ignyos/topic/update', topic)
-      // let data = app.processApiResponse(response)
       await dbCtx.topic.update(topic)
       state.updateTopic(topic)
       this.refreshTopicPane(true)
@@ -511,10 +478,7 @@ page = {
          state.selectedQuestionId = 0
          state.questions = []
       } else {
-         state.questions = await dbCtx.question.all(state.selectedTopicId)
-         // let response = await api.GET("ignyos/Question/List",[['topicId',state.selectedTopicId]])
-         // let data = app.processApiResponse(response)
-         // state.questions = data
+         state.questions = await dbCtx.question.byTopicId(state.selectedTopicId)
          this.populateQuestionList()
       }
    },
@@ -566,11 +530,7 @@ page = {
       input.classList.add('new-question')
       input.addEventListener('keyup',async (event) => {
          if (event.key == 'Enter') {
-            let val = document.getElementById('new-question').value.trim()
-            if (val == '') return
-            state.selectedQuestionId = 0
-            state.selectedQuestionId.shortPhrase = val
-            await this.showQuestionModal()
+            await this.initNewQuestion()
          } else if (event.key == 'Escape') {
             document.getElementById('new-question').value = ''
          }
@@ -583,14 +543,17 @@ page = {
       btn.classList.add('btn')
       btn.classList.add('plus')
       btn.addEventListener('click', async () => {
-         let val = document.getElementById('new-question').value.trim()
-         if (val == '') return
-         state.selectedQuestionId = 0
-         state.selectedQuestionId.shortPhrase = val
-         document.getElementById('new-question').value = ''
-         await this.showQuestionModal()
+         await this.initNewQuestion()
       })
       return btn
+   },
+
+   async initNewQuestion() {
+      let val = document.getElementById('new-question')?.value.trim()
+      if (!val || val == '') return
+      state.selectedQuestionId = 0
+      document.getElementById('new-question').value = ''
+      await this.showQuestionModal({ id: false, shortPhrase: val })
    },
 
    get questionList() {
@@ -633,8 +596,7 @@ page = {
       let ele = document.createElement('div')
       ele.classList.add('edit')
       ele.addEventListener('click', async () => {
-         state.selectedQuestionId = question.id
-         await this.showQuestionModal()
+         await this.showQuestionModal(question)
       })
       return ele
    },
@@ -651,13 +613,11 @@ page = {
    },
 
    async deleteQuestion(question) {
-      // let response = await api.GET('ignyos/question/delete', [["id",question.id]])
-      // let data = app.processApiResponse(response)
-      // if (data) state.deleteQuestion(question)
       question.deletedDate = new Date().toISOString()
       if (await dbCtx.question.update(question)) {
          state.deleteQuestion(question)
       }
+      app.hideModal()
       this.refreshQuestionPane(true)
    },
 
@@ -665,48 +625,42 @@ page = {
 
    //#region Question Modal
 
-   async showQuestionModal()
+   async showQuestionModal(question)
    {
       document.getElementById('site-header').classList.add('blur')
       document.getElementById('nav').classList.add('blur')
-      await this.loadQuestion()
-      app.formModal('question-modal-bg',this.questionModal)
+      await this.loadQuestion(question)
+      app.formModal('question-modal-bg', this.getQuestionModal(question))
    },
 
-   async loadQuestion() {
-      if (state.selectedQuestionId == 0) {
-         let val = document.getElementById('new-question').value.trim()
-         state.question = { shortPhrase: val }
-      } else {
-         let question = await dbCtx.question.get(state.selectedQuestionId)
+   async loadQuestion(question) {
+      if (question.id !== false) {
+         question = await dbCtx.question.get(question.id)
          if (question) {
             state.question = question
          } else {
             app.messageCenter.addError('The selected question could not be found.')
          }
-         // let response = await api.GET("ignyos/Question",[['id',state.selectedQuestionId]])
-         // let data = app.processApiResponse(response)
-         // state.question = data
       }
       document.getElementById('new-question').value = ''
    },
 
-   get questionModal() {
+   getQuestionModal(question) {
       let sp = document.createElement('input')
       sp.id = 'short-phrase'
       sp.type = 'text'
-      sp.value = state.question.shortPhrase
+      sp.value = question.shortPhrase
 
       let ph = document.createElement('textarea')
       ph.id = 'phrase'
       ph.placeholder = 'Enter the full phrasing of the question here.'
       ph.rows = 5
-      ph.innerText = state.question.phrase
+      ph.innerText = question.phrase ?? ''
 
       let an = document.createElement('textarea')
       an.id = 'answer'
       an.placeholder = 'Enter the answer to the question here.'
-      an.innerText = state.question.answer
+      an.innerText = question.answer ?? ''
 
       let frm = document.createElement('div')
       frm.classList.add('question-form')
@@ -751,24 +705,24 @@ page = {
       let form = this.questionForm
       if (form.isValid())
       {
-         // let response
          if (form.id == 0) {
             let newQuestion = new Question(form)
-            while (dbCtx.question.exists(newQuestion)) {
-               newQuestion = new Question(form)
+            newQuestion.id = newId(4)
+            let i = 0;
+            while (await dbCtx.question.exists(newQuestion.id) && i < 10) {
+               newQuestion.id = newId(4)
+               i++
+            }
+            if (i >= 10) {
+               messageCenter.addError('Could not create a new question. Please try again.')
+               return
             }
             await dbCtx.question.add(newQuestion)
             state.addQuestion(newQuestion)
-            // response = await api.POST("ignyos/Question", form)
-            // let data = app.processApiResponse(response)
-            // state.addQuestion(data)
          } else {
             let updatedQuestion = new Question(form)
             await dbCtx.question.update(updatedQuestion)
             state.updateQuestion(updatedQuestion)
-            // response = await api.POST("ignyos/Question/Update", form)
-            // let data = app.processApiResponse(response)
-            // state.updateQuestion(data)
          }
          this.refreshQuestionPane(true)
          document.getElementById('site-header').classList.remove('blur')
