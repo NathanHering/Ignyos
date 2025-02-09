@@ -872,7 +872,6 @@ const dbCtx = {
        * @returns {QuestionListItem[]}
        */
       async results(accountId, quizId) {
-         console.log("results", accountId, quizId);
          try {
             const store = getObjectStore(stores.QUESTION_ANSWER, "readonly");
             const index = store.index("compsiteIndex");

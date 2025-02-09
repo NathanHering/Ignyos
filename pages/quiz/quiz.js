@@ -1,6 +1,5 @@
 page = {
    get element() {
-      // console.log('element')
       let ele = document.createElement('div')
       ele.id = 'page'
       ele.appendChild(navigation.element)
@@ -13,7 +12,6 @@ page = {
    },
 
    get quizPane() {
-      // console.log('quizPane')
       let ele = document.createElement('div')
       ele.id = 'quiz-pane'
       ele.classList.add('in-progress')
@@ -34,7 +32,6 @@ page = {
    },
 
    getQuestionList(questions) {
-      // console.log('getQuestionList',questions)
       let ele = document.createElement('div')
       ele.id = 'question-list'
       questions.forEach(question => {
@@ -44,7 +41,6 @@ page = {
    },
 
    getQuestionListItem(question) {
-      // console.log('getQuestionListItem',question)
       let ele = document.createElement('div')
       ele.classList.add('item')
       if (question.correct) {
@@ -61,7 +57,6 @@ page = {
    //#region Taking Quiz
 
    async loadNextQuestion() {
-      // console.log('loadNextQuestion')
       let q = document.getElementById('question')
       q.classList.add('v-loading')
       let id = stateMgr.getNextQuestionId()
@@ -71,7 +66,6 @@ page = {
    },
 
    get questionEle() {
-      // console.log('questionEle')
       let ele = document.createElement('div')
       ele.id = 'question'
       ele.classList.add('info')
@@ -80,7 +74,6 @@ page = {
    },
 
    get answerEle() {
-      // console.log('answerEle')
       let ele = document.createElement('div')
       ele.id = 'answer'
       ele.classList.add('info')
@@ -88,7 +81,6 @@ page = {
    },
 
    get questionControls() {
-      // console.log('questionControls')
       let ele = document.createElement('div')
       ele.id = 'controls'
       ele.classList.add('invisible')
@@ -98,14 +90,12 @@ page = {
    },
 
    showAnswer() {
-      // console.log('showAnswer')
       let qp = document.getElementById('controls')
       qp.classList.remove('invisible')
       document.getElementById('answer').innerText = stateMgr.question.answer
    },
    
    get correctBtn() {
-      // console.log('correctBtn')
       let ele = document.createElement('div')
       ele.classList.add('correct')
       ele.classList.add('btn')
@@ -117,7 +107,6 @@ page = {
    },
    
    get incorrectBtn() {
-      // console.log('incorrectBtn')
       let ele = document.createElement('div')
       ele.classList.add('incorrect')
       ele.classList.add('btn')
@@ -150,7 +139,6 @@ page = {
    //#endregion
 
    async quitQuiz() {
-      // console.log('quitQuiz')
       app.confirm(async () => {
          await dbCtx.quiz.quit(stateMgr.account.id, stateMgr.quiz.id)
          stateMgr.quiz = {id: 0, startDateUTC: null, allQuestionIds: [], answeredQuestionIds: []}
@@ -181,14 +169,12 @@ navigation = {
    },
 
    loadQuizResults(questions) {
-      console.log('loadQuizResults',questions)
       let nav = document.getElementById('nav')
-      console.log('nav',nav)
       nav.innerHTML = null
       let summary = document.createElement('div')
       let count = questions.length
       let correct = questions.filter(q => q.correct).length
-      summary.innerText = `${correct} out of ${count} correct.`
+      summary.innerText = `${correct} out of ${count} correct`
       summary.id = 'question-counter'
 
       nav.appendChild(summary)

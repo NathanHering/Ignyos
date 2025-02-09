@@ -48,7 +48,6 @@ class StateManager {
    }
 
    async updateAccountLastUsed() {
-      // console.log('updateAccountLastUsed')
       let acct = this.account
       if (!acct) return
       acct.lastUsed = new Date().toISOString()
@@ -61,7 +60,6 @@ class StateManager {
    }
 
    async loadCurrentPage() {
-      // console.log('loadCurrentPage', this.account.state.currentPage)
       this.clearPageData()
       if (!this.account.state.currentPage) return
 
@@ -361,7 +359,6 @@ class StateManager {
    //#region Quiz Page
 
    async loadQuizPage() {
-      // console.log('loadQuizPage')
       let result = true
       
       const acct = this.account
@@ -379,7 +376,6 @@ class StateManager {
          }
       }
 
-      // console.log('quiz',this.quiz)
       if (this.quiz.allQuestionIds.length === this.quiz.answeredQuestionIds.length) {
          this.quiz.completeDate = new Date().toISOString()
          await dbCtx.quiz.update(this.quiz)

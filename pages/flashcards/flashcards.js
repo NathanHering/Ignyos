@@ -346,7 +346,6 @@ page = {
    },
 
    getFocusTopicBtn(topic) {
-      // console.log('getFocusTopicBtn',topic)
       let ele = document.createElement('div')
       ele.classList.add('focus-btn')
 

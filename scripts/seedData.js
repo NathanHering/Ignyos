@@ -68,7 +68,6 @@ class SeedData {
 async function addSeedData() {
    const accts = await dbCtx.account.all()
    if (accts.length > 0) {
-      console.log('Seed data already exists.')
       return
    }
    let seed;
