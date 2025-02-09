@@ -5,19 +5,9 @@ class App {
 
    async route() {
       this.hideModal()
-      state.currentAccount = await dbCtx.account.current()
-      state.currentPage = pages.HOME
+      new SiteHeader().removeMenus()
+      await stateMgr.loadSite()
       await this.initSiteHeader()
-      if (state.currentAccount.name !== '') {
-         await this.updateAccountLastUsed()
-         state.currentPage = pages.FLASH_CARDS
-         const q = await dbCtx.quiz.open(state.currentAccount.id)
-         if (q) {
-            state.quiz = q
-            state.currentPage = pages.QUIZ
-         }
-      }
-      this.initNav()
       await this.loadPage()
    }
 
@@ -28,12 +18,6 @@ class App {
          siteHeader.remove()
       }
       document.body.appendChild(await new SiteHeader().getElement())
-   }
-
-   initNav() {
-      let nav = document.getElementById('nav')
-      if (nav) nav.remove()
-      document.body.appendChild(navigation.element)
    }
 
    get title()
@@ -98,10 +82,11 @@ class App {
 
    get resources()
    {
+      const pg = stateMgr.account?.state?.currentPage ?? pages.HOME
       return {
-         src: `./pages/${state.currentPage}/${state.currentPage}.js`,
-         href: `./pages/${state.currentPage}/${state.currentPage}.css`,
-         version: this.pageVersion[state.currentPage]
+         src: `./pages/${pg}/${pg}.js`,
+         href: `./pages/${pg}/${pg}.css`,
+         version: this.pageVersion[pg]
       }
    }
 
@@ -109,8 +94,9 @@ class App {
    {
       const result = {}
       result[pages.HOME] = 0;
-      result[pages.QUIZ] = 0;
       result[pages.FLASH_CARDS] = 0;
+      result[pages.QUIZ] = 0;
+      result[pages.STATS] = 0;
       return result
    }
 
@@ -224,38 +210,43 @@ class App {
    }
 
    //#endregion
-
-   async updateAccountLastUsed() {
-      let acct = state.currentAccount
-      if (!acct) return
-      acct.lastUsed = new Date().toISOString()
-      await dbCtx.account.update(acct)
-   }
 }
 
 class SiteHeader {
-   constructor() {
-   }
+   constructor() { }
 
    async getElement()
    {
       let e = document.createElement('div')
       e.id = 'site-header'
-      e.appendChild(await this.getSiteLabel())
+      e.appendChild(await this.getMenuButton())
       e.appendChild(document.createElement('div'))
       e.appendChild(this.acctName)
       return e
    }
    
-   async getSiteLabel()
+   async getMenuButton()
    {
       let e = document.createElement('div')
       e.id="menu-button"
       e.innerText = "|||"
       e.addEventListener('click', async () => {
-         await this.displayMenu()
+         let menu = document.getElementById('main-menu');
+         if (menu && !menu.classList.contains('hidden')) {
+            this.removeMenus()
+         } else {
+            this.removeMenus()
+            await this.displayMenu()
+         }
       })
       return e
+   }
+
+   removeMenus() {
+      let menu = document.getElementById('main-menu');
+      if (menu) { menu.remove() }
+      let subMenu = document.querySelector('.sub-menu')
+      if (subMenu) { subMenu.remove() }
    }
 
    async displayMenu() {
@@ -264,7 +255,9 @@ class SiteHeader {
       menu = await this.getMainMenu();
       document.body.appendChild(menu);
       menu.classList.toggle('hidden');
-      document.addEventListener('click', this.hideMenuOnClickOutside.bind(this));
+      document.addEventListener('click', 
+         this.hideMenuOnClickOutside.bind(this)
+      );
     }
 
     hideMenuOnClickOutside(event) {
@@ -282,24 +275,70 @@ class SiteHeader {
       e.classList.add('hidden')
       e.classList.add('menu')
       let ul = document.createElement('ul')
-      let newAcct = this.getMenuItem("New Student")
+      
+      let enabled = stateMgr.account?.state?.currentPage != pages.QUIZ && stateMgr.account?.state?.currentPage != pages.HOME
+
+      let homeBtn = this.getMenuItem("Home", false, enabled)
+      if (enabled) this.addPageSwitcher(homeBtn, pages.HOME)
+      ul.appendChild(homeBtn)
+
+      ul.appendChild(document.createElement('hr'))
+      
+      enabled = stateMgr.account?.state?.currentPage != pages.QUIZ
+      let newAcct = this.getMenuItem("New Student", false, enabled)
       newAcct.addEventListener('click', this.createNewAccount)
       ul.appendChild(newAcct)
-      ul.appendChild(this.getMenuItem("Switch Student" , await this.getAcctSubMenu()))
+
+      enabled = stateMgr.accounts?.length > 1 && stateMgr.account?.state?.currentPage != pages.QUIZ
+      let acctSubMenu = false
+      if (enabled) acctSubMenu = await this.getAcctSubMenu()
+      ul.appendChild(this.getMenuItem("Switch Student" , acctSubMenu, enabled))
+
       ul.appendChild(document.createElement('hr'))
-      ul.appendChild(this.getMenuItem("Quiz Me!", false))
+      
+      enabled = this.doEnableQuizBtn()
+      let quizMe = this.getMenuItem("Quiz Me!", false, enabled)
+      if (enabled) this.addPageSwitcher(quizMe, pages.QUIZ, () => stateMgr.createNewQuiz())
+      ul.appendChild(quizMe)
+
+      enabled = stateMgr.account && stateMgr.account?.state?.currentPage != pages.QUIZ && stateMgr.account?.state?.currentPage != pages.STATS
+      let statsBtn = this.getMenuItem("Stats", false, enabled)
+      if (enabled) this.addPageSwitcher(statsBtn, pages.STATS)
+      ul.appendChild(statsBtn)
+
+      enabled = stateMgr.account && stateMgr.account?.state?.currentPage != pages.QUIZ && stateMgr.account?.state?.currentPage != pages.FLASH_CARDS
+      let fcBtn = this.getMenuItem("Flash Cards", false, enabled)
+      if (enabled) this.addPageSwitcher(fcBtn, pages.FLASH_CARDS)
+      ul.appendChild(fcBtn)
+
       e.appendChild(ul)
       return e
    }
 
-   getMenuItem(txt, submenu = false) {
+   addPageSwitcher(li, page, adtnlFn = null) {
+      li.addEventListener('click', async () => {
+         if (adtnlFn) await adtnlFn()
+         await stateMgr.setPage(page)
+         let pgEle = document.getElementById('page')
+         if (pgEle) pgEle.innerHTML = null
+         await app.route()
+      })
+   }
+   
+   doEnableQuizBtn() {
+      const isQuizPage = stateMgr.account?.state.currentPage == pages.QUIZ
+      const canCreateQuiz = stateMgr.focusTopicIds.length > 0
+      return !isQuizPage && canCreateQuiz
+   }
+
+   getMenuItem(txt, submenu = false, enabled = true) {
       let li = document.createElement('li')
       let span = document.createElement('span')
       span.innerText = txt
       li.appendChild(span)
       let arrowDiv = document.createElement('div')
       li.appendChild(arrowDiv)
-      if (submenu) {
+      if (submenu && enabled) {
             arrowDiv.classList.add('chev-r')
             document.body.appendChild(submenu)
             li.addEventListener('click', (event) => {
@@ -315,6 +354,9 @@ class SiteHeader {
                document.addEventListener('click', this.hideSubMenuOnClickOutside.bind(this, submenu));
          })
       }
+      if (!enabled) {
+         li.classList.add('disabled')
+      }
       return li
    }
 
@@ -323,9 +365,9 @@ class SiteHeader {
             submenu.classList.add('hidden');
             document.removeEventListener('click', this.hideSubMenuOnClickOutside.bind(this, submenu));
         }
-    }
+   }
 
-    hideElementOnClickOutside(element, event) {
+   hideElementOnClickOutside(element, event) {
       if (!element.contains(event.target)) {
             element.classList.add('hidden');
             document.removeEventListener('click', this.hideElementOnClickOutside.bind(this, element));
@@ -364,7 +406,7 @@ class SiteHeader {
          let n = val.trim()
          if (n.length > 0) {
             if (await dbCtx.account.exists(n)) {
-               messageCenter.addError(`Account '${n}' already exists.`)
+               messageCenter.addError(`A student '${n}' already exists.`)
             } else {
                const newAccount = new Account({ name: n });
                await dbCtx.account.add(newAccount)
@@ -372,7 +414,7 @@ class SiteHeader {
                app.route()
             }
          } else {
-            messageCenter.addError('Account Name cannot be blank.')
+            messageCenter.addError('Name cannot be blank.')
          }
       }, "Student's Name...");
       document.getElementById('main-menu').remove();
@@ -380,6 +422,8 @@ class SiteHeader {
 
    async switchToAccount(id) {
       await dbCtx.metadata.setSelectedAccountId(id)
+      let pgEle = document.getElementById('page')
+      if (pgEle) pgEle.innerHTML = null
       app.route()
    }
 
@@ -387,87 +431,9 @@ class SiteHeader {
    {
       let div = document.createElement('div')
       div.classList.add('acct-name')
-      div.innerText = state.currentAccount.name
+      div.innerText = stateMgr.account?.name ?? ''
       return div
    }
-}
-
-navigation = {
-   get element() {
-      let n = this.nav
-      if (state.currentPage == pages.QUIZ) {
-         n.classList.add('quiz')
-         n.appendChild(this.questionCounter)
-         n.appendChild(this.showAnswerBtn)
-         n.appendChild(this.quitQuizBtn)
-      } else {
-         n.classList.add('standard')
-         n.appendChild(this.quizBtn)
-      }
-      return n
-   },
-
-   get nav() {
-      let nav = document.getElementById('nav')
-      if (nav) {
-         nav.innerHTML = null
-      } else {
-         nav = document.createElement('div')
-         nav.id = 'nav'
-      }
-      return nav
-   },
-
-   get questionCounter() {
-      let ele = document.createElement('div')
-      let n = state.quiz.answeredQuestionIds.length + 1
-      let total = state.quiz.allQuestionIds.length
-      ele.innerText= `Question ${n} of ${total}`
-      ele.id = 'question-counter'
-      return ele
-   },
-
-   get showAnswerBtn() {
-      let ele = this.getNavItemPill("Show Answer", false)
-      ele.id = 'show-answer'
-      ele.addEventListener('click', () => {
-         page.showAnswer()
-      })
-      return ele
-   },
-
-   get quitQuizBtn() {
-      let ele = this.getNavItemPill("End Quiz", false)
-      ele.id = 'quit-quiz'
-      ele.addEventListener('click', async () => {
-         await page.quitQuiz()
-      })
-      return ele
-   },
-
-   get quizBtn() {
-      let ele = this.getNavItemPill("Quiz Me!", state.currentPage == pages.QUIZ)
-      ele.id = 'create-quiz'
-      if (state.currentPage != pages.QUIZ) {
-         ele.addEventListener('click', async () => {
-            state.quiz = await dbCtx.quiz.create(state.currentAccount.id, state.currentAccount.settings.defaultQuestionCount)
-            state.currentPage = pages.QUIZ
-            await app.route()
-         })
-      }
-      return ele
-   },
-
-   getNavItemPill(text, selected) {
-      let ele = document.createElement('div')
-      ele.innerText = text
-      if (selected) {
-         ele.classList.add('pill-selected')
-      } else {
-         ele.classList.add('pill')
-      }
-      return ele
-   },
 }
 
 messageCenter = {

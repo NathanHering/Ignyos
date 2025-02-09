@@ -18,14 +18,13 @@
     <body>
     </body>
     <script>
-        let state, app, page
+        let stateMgr, app, page
         window.onload = async () => {
             await ensureDbReady()
-            state = new State("Ignyos.Funtility")
+            stateMgr = new StateManager()
             app = new App()
 
-            // let seed = new SeedData()
-            // await seed.save()
+            await addSeedData()
         }
     </script>
 </html>

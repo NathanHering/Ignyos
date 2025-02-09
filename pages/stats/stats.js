@@ -2,7 +2,13 @@ page = {
    get element() {
       let ele = document.createElement('div')
       ele.id = 'page'
-      ele.appendChild(this.quizPane)
+      ele.innerText = "Stats."
       return ele
    },
+   async load() {
+
+   },
+   
 }
+
+navigation = {}

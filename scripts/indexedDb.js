@@ -174,7 +174,9 @@ const dbCtx = {
 
             return await new Promise((resolve, reject) => {
                accountRequest.onsuccess = function(event) {
-                  resolve(event.target.result);
+                  // Map the results to Account objects.
+                  // This allows for an easy way to migrate the account class definition.
+                  resolve(event.target.result.map(data => new Account(data)));
                };
                accountRequest.onerror = function(event) {
                   reject("Selected account not found");
@@ -223,14 +225,6 @@ const dbCtx = {
       }
    },
    accountSubject: {
-      /**
-       * Creates an empty collection of SubjectListItem objects for the given account id.
-       * Then looks up all the subjects for each AccountSubject. Then instantiates a
-       * SubjectListItem object for each subject by passing in the accountSubject to the
-       * constructor. Then returns the collection of SubjectListItem objects.
-       * @param {*} accountId 
-       * @returns {[SubjectListItem]}
-       */
       async list(accountId) {
          try {
             const accountSubjects = await this.all(accountId);
@@ -301,12 +295,6 @@ const dbCtx = {
             console.error(error);
          }
       },
-      /**
-       * Finds the AccountSubject by AccountId and SubjectId, then removes the AccountSubject from the store.
-       * @param {*} accountId 
-       * @param {*} subjectId 
-       * @returns 
-       */
       async delete(accountId, subjectId) {
          try {
             const store = getObjectStore(stores.ACCOUNT_SUBJECT, "readwrite");
@@ -318,8 +306,13 @@ const dbCtx = {
                   const cursor = event.target.result;
                   if (cursor) {
                      if (cursor.value.subjectId === subjectId) {
-                        store.delete(cursor.value.id);
-                        resolve();
+                        const deleteRequest = cursor.delete();
+                        deleteRequest.onsuccess = function() {
+                           resolve();
+                        };
+                        deleteRequest.onerror = function() {
+                           reject("Failed to delete the record");
+                        };
                      } else {
                         cursor.continue();
                      }
@@ -401,6 +394,7 @@ const dbCtx = {
        * @returns 
        */
       async byTopicId(topicId) {
+         if (!topicId) return [];
          try {
             const store = getObjectStore(stores.QUESTION, "readonly");
             const index = store.index("topicId");
@@ -464,6 +458,7 @@ const dbCtx = {
          }
       },
       async exists(id) {
+         if (!id) return false;
          try {
             const resp = await this.get(id);
             return resp === false ? false : true;
@@ -510,8 +505,40 @@ const dbCtx = {
       }
    },
    questionAnswer: {
+      /**
+       * Returns all the QuestionAnswers for the given account
+       * id where the QuestionAnswer.Id >= the date filter.
+       * @param {string} acctId 
+       * @param {Date.toISOString} dateFilter 
+       */
+      async byAccountId(acctId, dateFilter) {
+         try {
+            const store = getObjectStore(stores.QUESTION_ANSWER, "readonly");
+            const index = store.index("accountId");
+            const request = index.openCursor(IDBKeyRange.bound([acctId, dateFilter], [acctId, new Date().toISOString()]));
+
+            return await new Promise((resolve, reject) => {
+               const answers = [];
+               request.onsuccess = function(event) {
+                  const cursor = event.target.result;
+                  if (cursor) {
+                     answers.push(cursor.value);
+                     cursor.continue();
+                  } else {
+                     resolve(answers);
+                  }
+               };
+
+               request.onerror = function(event) {
+                  reject("Answers not found");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+            return [];
+         }
+      },
       async add(answer) {
-         console.log(JSON.stringify(answer));
          try {
             const store = getObjectStore(stores.QUESTION_ANSWER, "readwrite");
             const request = store.add(answer);
@@ -531,25 +558,71 @@ const dbCtx = {
       }
    },
    quiz: {
-      /**
-       * Get the currently open quiz that matches the user account id and has not been completed.
-       * Returns false if no quiz is found.
-       * @param {string} acctId - The account of the active user.
-       * @returns {Quiz} The active quiz or false.
-       */
-      async open(acctId) {
+      // async get(id) {
+      //    try {
+      //       const store = getObjectStore(stores.QUIZ, "readonly");
+      //       const request = store.get(id);
+
+      //       return await new Promise((resolve, reject) => {
+      //          request.onsuccess = function(event) {
+      //             resolve(event.target.result);
+      //          };
+
+      //          request.onerror = function(event) {
+      //             reject("Quiz not found");
+      //          };
+      //       });
+      //    } catch (error) {
+      //       console.error(error);
+      //       return new Quiz();
+      //    }
+      // },
+      async byAccountId(acctId) {
          try {
             const store = getObjectStore(stores.QUIZ, "readonly");
             const index = store.index("accountId");
-            const request = index.get(acctId);
+            const request = index.getAll(acctId);
 
-            return new Promise((resolve, reject) => {
+            return await new Promise((resolve, reject) => {
                request.onsuccess = function(event) {
-                  const quiz = event.target.result;
-                  if (quiz && !quiz.completeDate) {
-                     resolve(quiz);
-                  } else {
+                  resolve(event.target.result);
+               };
+
+               request.onerror = function(event) {
+                  reject("Quiz not found");
+               };
+            });
+         } catch (error) {
+            console.error(error);
+            return [];
+         }
+      },
+      /**
+       * Get the current quiz for the account id. If there is a quiz with
+       * the completedDate set to null, then return that quiz. Otherwise return the quiz with the most recent completedDate.
+       * @param {*} acctId 
+       */
+      async latest(acctId) {
+         try {
+            const store = getObjectStore(stores.QUIZ, "readonly");
+            const index = store.index("accountId");
+            const request = index.getAll(acctId);
+
+            return await new Promise((resolve, reject) => {
+               request.onsuccess = function(event) {
+                  const quizzes = event.target.result;
+                  if (quizzes.length === 0) {
                      resolve(false);
+                  } else {
+                     const openQuizzes = quizzes.filter(quiz => !quiz.completeDate);
+                     if (openQuizzes.length > 0) {
+                        resolve(new Quiz(openQuizzes[0]));
+                     } else {
+                        const sorted = quizzes.sort((a, b) => {
+                           return a.completeDate.localeCompare(b.completeDate);
+                        });
+                        resolve(new Quiz(sorted[0]));
+                     }
                   }
                };
 
@@ -562,6 +635,37 @@ const dbCtx = {
             return false;
          }
       },
+      // /**
+      //  * Get the currently open quiz that matches the user account id and has not been completed.
+      //  * Returns false if no quiz is found.
+      //  * @param {string} acctId - The account of the active user.
+      //  * @returns {Quiz} The active quiz or false.
+      //  */
+      // async open(acctId) {
+      //    try {
+      //       const store = getObjectStore(stores.QUIZ, "readonly");
+      //       const index = store.index("accountId");
+      //       const request = index.get(acctId);
+
+      //       return new Promise((resolve, reject) => {
+      //          request.onsuccess = function(event) {
+      //             const quiz = event.target.result;
+      //             if (quiz && !quiz.completeDate) {
+      //                resolve(new Quiz(event.target.result));
+      //             } else {
+      //                resolve(false);
+      //             }
+      //          };
+
+      //          request.onerror = function(event) {
+      //             reject("Quiz not found");
+      //          };
+      //       });
+      //    } catch (error) {
+      //       console.error(error);
+      //       return false;
+      //    }
+      // },
       async create(acctId, questionCount) {
          try {
             const result = new Quiz({ accountId: acctId });
@@ -768,6 +872,7 @@ const dbCtx = {
        * @returns {QuestionListItem[]}
        */
       async results(accountId, quizId) {
+         console.log("results", accountId, quizId);
          try {
             const store = getObjectStore(stores.QUESTION_ANSWER, "readonly");
             const index = store.index("compsiteIndex");
@@ -863,17 +968,16 @@ const dbCtx = {
       }
    },
    topic: {
-      all(subjectId) {
+      async all(subjectId) {
+         if (!subjectId) return [];
          try {
             const store = getObjectStore(stores.TOPIC, "readonly");
             const index = store.index("subjectId");
             const request = index.getAll(subjectId);
-
-            return new Promise((resolve, reject) => {
+            return await new Promise((resolve, reject) => {
                request.onsuccess = function(event) {
-                  resolve(event.target.result);
+                  resolve(event.target.result.filter(topic => !topic.deletedDate).sort((a, b) => a.title.localeCompare(b.title)));
                };
-
                request.onerror = function(event) {
                   resolve([]);
                };

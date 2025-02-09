@@ -1,12 +1,19 @@
 class Account {
    constructor(data = {}) {
-      this.id = Object.hasOwn(data, 'id') ? data.id : newId(4)
+      this.id = Object.hasOwn(data, 'id') ? data.id : newId(6)
       this.created = Object.hasOwn(data, 'created') ? data.created : new Date().toISOString()
       this.lastUsed = Object.hasOwn(data, 'lastUsed') ? data.lastUsed : new Date().toISOString()
       this.name = Object.hasOwn(data, 'name') ? data.name : ''
+
       this.settings = Object.hasOwn(data, 'settings') ? new AccountSettings(data.settings) : new AccountSettings()
+      
       this.state = Object.hasOwn(data, 'state') ? new AccountState(data.state) : new AccountState()
    }
+}
+
+const statsViews = {
+   BY_QUESTION: 'byQuestion',
+   BY_QUIZ: 'byQuiz',
 }
 
 class AccountSettings {
@@ -20,9 +27,17 @@ class AccountSettings {
 
 class AccountState {
    constructor(data = {}) {
-      this.currentPage = Object.hasOwn(data, 'currentPage') ? data.currentPage : ''
-      this.currentQuizId = Object.hasOwn(data, 'currentQuizId') ? data.currentQuizId : ''
+      this.currentPage = Object.hasOwn(data, 'currentPage') ? data.currentPage : pages.FLASH_CARDS
+
+      // this.currentQuizId = Object.hasOwn(data, 'currentQuizId') ? data.currentQuizId : ''
       this.selectedSubjectId = Object.hasOwn(data, 'selectedSubjectId') ? data.selectedSubjectId : ''
+
+      this.statsView = Object.hasOwn(data, 'statsView') ? data.statsView : statsViews.BY_QUESTION
+      /**
+       * @type {Date} statsFilterDate The date to filter stats by.
+       * Default is 90 days ago.
+       */
+      this.statsFilterDate = Object.hasOwn(data, 'statsFilterDate') ? data.statsFilterDate : new Date(new Date().setDate(new Date().getDate() - 90)).toISOString()
    }
 }
 
@@ -34,7 +49,7 @@ class AccountSubject {
       // meta data
       this.focusTopicIds = Object.hasOwn(data, 'focusTopicIds') ? data.focusTopicIds : []
       this.selectedTopicId = Object.hasOwn(data, 'selectedTopicId') ? data.selectedTopicId : ''
-      this.selectedQuestionId = Object.hasOwn(data, 'selectedQuestionId') ? data.selectedQuestionId : ''
+      this.selectedQuestion = Object.hasOwn(data, 'selectedQuestion') ? data.selectedQuestion : {}
    }
 }
 
@@ -47,7 +62,7 @@ class MetaData {
 
 class Question {
    constructor(data = {}) {
-      this.id = Object.hasOwn(data, 'id') ? data.id : newId(4)
+      this.id = Object.hasOwn(data, 'id') ? data.id : null
       this.topicId = Object.hasOwn(data, 'topicId') ? data.topicId : ''
       this.shortPhrase = Object.hasOwn(data, 'shortPhrase') ? data.shortPhrase : ''
       this.phrase = Object.hasOwn(data, 'phrase') ? data.phrase : ''
@@ -69,17 +84,23 @@ class QuestionAnswer {
 class Quiz {
    constructor(data = {})
    {
-      this.id = Object.hasOwn(data, 'id') ? data.id : newId(4)
+      this.id = Object.hasOwn(data, 'id') ? data.id : newId(6)
       this.accountId = Object.hasOwn(data, 'accountId') ? data.accountId : ''
       this.completeDate = Object.hasOwn(data, 'completeDate') ? data.completeDate : null
       this.allQuestionIds = Object.hasOwn(data, 'allQuestionIds') ? data.allQuestionIds : []
       this.answeredQuestionIds = Object.hasOwn(data, 'answeredQuestionIds') ? data.answeredQuestionIds : []
    }
+   get isComplete() {
+      if (this.allQuestionIds.length ===  this.answeredQuestionIds.length) {
+         return true
+      } 
+      return false
+   }
 }
 
 class Subject {
    constructor(data = {}) {
-      this.id = Object.hasOwn(data, 'id') ? data.id : newId(4)
+      this.id = Object.hasOwn(data, 'id') ? data.id : newId(6)
       this.title = Object.hasOwn(data, 'title') ? data.title : ''
       this.deletedDate = Object.hasOwn(data, 'deletedDate') ? data.deletedDate : null
    }
@@ -87,9 +108,10 @@ class Subject {
 
 class Topic {
    constructor(data = {}) {
-      this.id = Object.hasOwn(data, 'id') ? data.id : newId(4)
+      this.id = Object.hasOwn(data, 'id') ? data.id : newId(6)
       this.subjectId = Object.hasOwn(data, 'subjectId') ? data.subjectId : ''
       this.title = Object.hasOwn(data, 'title') ? data.title : ''
+      this.questionCount = Object.hasOwn(data, 'questionCount') ? data.questionCount : 0
       this.deletedDate = Object.hasOwn(data, 'deletedDate') ? data.deletedDate : null
    }
 }
@@ -103,12 +125,17 @@ class SubjectListItem {
     * @param {Subject} subject The Subject object that contains the title and id
     */
    constructor(accountSubject, subject) {
-      this.id = subject.id
-      this.title = subject.title
-
+      this.subjectId = accountSubject.subjectId
+      this.accountId = accountSubject.accountId
       this.focusTopicIds = accountSubject.focusTopicIds
       this.selectedTopicId = accountSubject.selectedTopicId
-      this.selectedQuestionId = accountSubject.selectedQuestionId
+      this.selectedQuestion = accountSubject.selectedQuestion
+      
+      this.title = subject.title
+   }
+
+   toSubject() {
+      return new Subject({id:this.subjectId, title:this.title})
    }
 }
 
@@ -118,6 +145,19 @@ class QuestionListItem {
       this.id = question.id
       this.shortPhrase = question.shortPhrase
       this.correct = questionAnswer.answeredCorrectly
+      /**
+       * @type {[boolean]} [true, false] A collection of historical answers.
+       * Used in the stats page to show overall performance.
+       */
+      this.history = []
+   }
+   /**
+    * @returns {percent} The percentage of correct answers for this question.
+    * This will always be rounded to the nearest whole number.
+    */
+   get score() {
+      let correct = this.history.filter(x => x).length
+      return Math.round((correct / this.history.length) * 100)
    }
 }
 

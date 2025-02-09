@@ -5,7 +5,7 @@ const pages = {
    STATS: "stats"
 }
 
-class StateMgr {
+class StateManager {
    constructor() {
       //#sitewide
       this.metaData;
@@ -22,32 +22,61 @@ class StateMgr {
       
       //#stats page
       this.quizes;
+      this.questionAnswers;
       
       //#quiz page
       this.quiz;
    }
+
    async loadSite() {
       this.metaData = await dbCtx.metadata.get()
-      this.accounts = await dbCtx.accounts.all()
+      this.accounts = await dbCtx.account.all()
       if (this.metaData.selectedAccountId) {
-         this.account = await dbCtx.accounts.byId(this.metaData.selectedAccountId)
-         this.clearPageData()
+         await this.updateAccountLastUsed()
          await this.loadCurrentPage()
       } else {
-         this.account = null
          this.clearPageData()
       }
    }
+
+   /**
+    * @returns {Account} The currently selected account or null if no account is selected
+    */
+   get account() {
+      if (!this.accounts || !this.metaData.selectedAccountId) return null
+      return this.accounts.find(a => a.id == this.metaData.selectedAccountId) ?? null
+   }
+
+   async updateAccountLastUsed() {
+      // console.log('updateAccountLastUsed')
+      let acct = this.account
+      if (!acct) return
+      acct.lastUsed = new Date().toISOString()
+      await dbCtx.account.update(acct)
+   }
+
+   async setPage(page) {
+      this.account.state.currentPage = page
+      await dbCtx.account.update(this.account)
+   }
+
    async loadCurrentPage() {
-      if (!this.metaData.currentPage) return
-      switch (this.metaData.currentPage) {
+      // console.log('loadCurrentPage', this.account.state.currentPage)
+      this.clearPageData()
+      if (!this.account.state.currentPage) return
+
+      switch (this.account.state.currentPage) {
          case pages.HOME:
             break
          case pages.FLASH_CARDS:
             await this.loadFlashcardsPage()
             break
          case pages.QUIZ:
-            await this.loadQuizPage()
+            if (!await this.loadQuizPage()) {
+               await this.setPage(pages.FLASH_CARDS)
+               await this.loadFlashcardsPage()
+               messageCenter.addError('Error loading Quiz.')
+            }
             break
          case pages.STATS:
             await this.loadStatsPage()
@@ -56,6 +85,7 @@ class StateMgr {
             break
       }      
    }
+
    clearPageData() {
       this.subjects = []
       this.topics = []
@@ -64,63 +94,301 @@ class StateMgr {
       this.quizes = []
       this.quiz = null
    }
+
+   //#region Flashcards Page
+
    async loadFlashcardsPage() {
-      this.subjects = await dbCtx.subjects.all()
-      this.topics = await dbCtx.topics.all()
-      this.questions = await dbCtx.questions.all()
-   }
-   async loadQuizPage() {
-      this.quizes = await dbCtx.quizes.all()
-      this.quiz = null
-   }
-}
-
-class State {
-   constructor(siteName) {
-      this.name = siteName
-      this.getLocal()
+      if (!this.metaData?.selectedAccountId) { this.clearPageData(); return }
+      if (!await this.loadSubjects()) return
+      if (!await this.loadTopics()) return
+      await this.loadQuestions()
    }
 
-   //#region Current Page
+   async loadSubjects() {
+      this.subjects = await dbCtx.accountSubject.list(this.metaData.selectedAccountId)
+      if (!this.subjects || !this.subjects.length) {
+         this.subjects = []
+         this.topics = []
+         this.questions = []
+         return false
+      } else {
+         this.subjects.sort((a,b) => {
+            return a.title.localeCompare(b.title)
+         })
+         return true
+      }
+   }
 
-   _currentAccount = new Account()
-   get currentAccount() {
-      return this._currentAccount
-   }
-   set currentAccount(data) {
-      this._currentAccount = new Account(data)
+   async loadTopics() {
+      this.topics = await dbCtx.topic.all(this.subjectId)
+      if (!this.topics || !this.topics.length) {
+         this.topics = []
+         this.questions = []
+         return false
+      } else {
+         this.topics.sort((a,b) => {
+            return a.title.localeCompare(b.title)
+         })
+         return true
+      }
    }
 
-   _currentPage
-   get currentPage() {
-      if (!this._currentPage) this._currentPage = pages.HOME
-      return this._currentPage
+   async loadQuestions() {
+      this.questions = await dbCtx.question.byTopicId(this.topicId)
+      if (!this.questions || !this.questions.length) {
+         this.questions = []
+      } else {
+         this.questions.sort((a,b) => {
+            return a.shortPhrase.localeCompare(b.shortPhrase)
+         })
+      }
    }
-   set currentPage(data) {
-      this._currentPage = data
-      this.setLocal()
+
+   /**
+    * @returns {string} The Id of the currently selected subject or null if no subject is selected
+    */
+   get subjectId() {
+      let result = this.account?.state?.selectedSubjectId ?? null
+      return result
+   }
+
+   async setSubjectId(id) {
+      this.account.state.selectedSubjectId = id
+      await dbCtx.account.update(this.account)
+   }
+
+   async addNewAccountSubject(data) {
+      this.account.state.selectedSubjectId = data.subjectId
+      await dbCtx.account.update(this.account)
+      this.subjects.push(data)
+      this.subjects.sort((a,b) => {
+         return a.title.localeCompare(b.title)
+      })
+      this.topics = []
+      this.questions = []
+   }
+
+   async updateAccountSubject(acctSub) {
+      const sub = acctSub.toSubject()
+      await dbCtx.subject.update(sub)
+      this.account.state.selectedSubjectId = acctSub.subjectId
+      let i = this.subjects.findIndex((e) => {
+         e.subjectId == acctSub.subjectId
+      })
+      this.subjects[i] = acctSub
+      this.subjects.sort((a,b) => {
+         return a.title.localeCompare(b.title)
+      })
+   }
+
+   async deleteAccountSubject(acctSub) {
+      acctSub.deletedDate = new Date().toISOString()
+      await dbCtx.accountSubject.delete(this.account.id, acctSub.subjectId)
+      let i = this.subjects.findIndex((e) => e.subjectId == acctSub.subjectId)
+      this.subjects.splice(i,1)
+      if (this.account.state.selectedSubjectId == acctSub.subjectId) {
+         this.account.state.selectedSubjectId = ''
+         await dbCtx.account.update(this.account)
+         this.topics = []
+         this.questions = []
+      }
+   }
+
+   /**
+    * @returns {AccountSubject} The currently selected subject or null if no subject is selected
+    */
+   get accountSubject() {
+      const result = this.subjects.find(s => s.subjectId == this.subjectId)
+      return result ?? null
+   }
+
+   /**
+    * @returns {string} The Id of the currently selected topic or null if no topic is selected
+    */
+   get topicId() {
+      let result = null
+      if (this.accountSubject) {
+         result = this.accountSubject.selectedTopicId ?? null
+      }
+      return result
+   }
+
+   get topic() {
+      if (!this.topics || !this.topicId) return null
+      return this.topics.find(t => t.id == this.topicId) ?? null
+   }
+
+   get focusTopicIds() {
+      let result = []
+      if (!this.subjects) return result
+      this.subjects.forEach(s => {
+         s.focusTopicIds.forEach(t => {
+            result.push(t)
+         })
+      })
+      return result
+   }
+   
+   async setTopicId(id) {
+      this.accountSubject.selectedTopicId = id
+      this.accountSubject.subjectId = this.subjectId
+      const acctSub = new AccountSubject(this.accountSubject)
+      acctSub.accountId = this.account.id
+      acctSub.selectedTopicId = id
+      await dbCtx.accountSubject.update(acctSub)
+      await this.loadQuestions()
+   }
+
+   async toggleFocusTopic(id) {
+      let i = this.accountSubject.focusTopicIds.indexOf(id)
+      if (i > -1) {
+         this.accountSubject.focusTopicIds.splice(i, 1)
+      } else {
+         this.accountSubject.focusTopicIds.push(id)
+      }
+      await dbCtx.accountSubject.update(this.accountSubject)
+   }
+
+   async addNewTopic(data) {
+      this.accountSubject.selectedTopicId = data.id
+      await dbCtx.accountSubject.update(this.accountSubject)
+      await dbCtx.account.update(this.account)
+      this.topics.push(data)
+      this.topics.sort((a,b) => {
+         return a.title.localeCompare(b.title)
+      })
+      this.questions = []
+   }
+
+   async updateTopic(topic) {
+      this.accountSubject.selectedTopicId = topic.id
+      await dbCtx.accountSubject.update(this.accountSubject)
+
+      let i = this.topics.findIndex((e) => e.id == topic.id)
+      this.topics[i] = topic
+      this.topics.sort((a,b) => {
+         return a.title.localeCompare(b.title)
+      })
+      await dbCtx.topic.update(topic)
+   }
+
+   async updateTopicQuestionCount(increment) {
+      let topic = this.topics.find(t => t.id == this.topicId)
+      topic.questionCount += increment
+      await dbCtx.topic.update(topic)
+      if (topic.questionCount == 0) {
+         // make sure the topic is not selected as a focus topic
+         let i = this.accountSubject.focusTopicIds.indexOf(topic.id)
+         if (i > -1) {
+            this.accountSubject.focusTopicIds.splice(i, 1)
+            await dbCtx.accountSubject.update(this.accountSubject)
+         }
+      }
+   }
+   
+   async deleteTopic(topic) {
+      topic.deletedDate = new Date().toISOString()
+      await dbCtx.topic.update(topic)
+      let i = this.topics.findIndex((e) => e.id == topic.id)
+      this.topics.splice(i,1)
+      if (this.accountSubject.selectedTopicId == topic.id) {
+         this.accountSubject.selectedTopicId = ''
+         await dbCtx.accountSubject.update(this.accountSubject)
+         this.questions = []
+      }
+      i = this.accountSubject.focusTopicIds.indexOf(topic.id)
+      if (i > -1) {
+         this.accountSubject.focusTopicIds.splice(i, 1)
+      }
+      await dbCtx.accountSubject.update(this.accountSubject)
+   }
+
+   async addQuestion(question) {
+      await this.updateTopicQuestionCount(1)
+      question.id = await newQuestionId()
+      this.question = question
+      await this.updateSelectedQuestion(question.id)
+      await dbCtx.question.add(question)
+      this.questions.push(question)
+      this.questions.sort((a,b) => {
+         return a.shortPhrase.localeCompare(b.shortPhrase)
+      })
+   }
+
+   async updateQuestion(question) {
+      await this.updateSelectedQuestion(question.id)
+      await dbCtx.question.update(question)
+      let i = this.questions.findIndex((e) => e.id == question.id)
+      if (i > -1) {
+         this.questions[i] = question
+      } else {
+         alert("Question not found in State")
+      }
+      this.questions.sort((a,b) => {
+         return a.shortPhrase.localeCompare(b.shortPhrase)
+      })      
+   }
+
+   async updateSelectedQuestion(id) {
+      const tId = this.topicId
+      if (tId) {
+         this.accountSubject.selectedQuestion[tId] = id
+         await dbCtx.accountSubject.update(this.accountSubject)
+      }
+   }
+
+   async deleteQuestion(question) {
+      await this.updateTopicQuestionCount(-1)
+      question.deletedDate = new Date().toISOString()
+      await dbCtx.question.update(question)
+      if (this.accountSubject.selectedQuestion[this.topicId] === question.id) {
+         delete this.accountSubject.selectedQuestion[this.topicId]
+         await dbCtx.accountSubject.update(this.accountSubject)
+      }
+      let i = this.questions.findIndex((e) => {
+         e.id == question.id
+      })
+      this.questions.splice(i,1)
+   }
+
+   async setQuestion(question) {
+      this.question = question
+      await this.updateSelectedQuestion(question.id)
    }
 
    //#endregion
 
-   //#region Quiz
+   //#region Quiz Page
 
-   _quiz = false
-   get quiz()
-   {
-      return this._quiz
-   }
-   set quiz(data)
-   {
-      if (data) {
-         this._quiz = new Quiz(data)
-         if (this._quiz.id !== 0) this.currentPage = pages.QUIZ
-      } else {
-         this._quiz = false
+   async loadQuizPage() {
+      // console.log('loadQuizPage')
+      let result = true
+      
+      const acct = this.account
+      if (!acct) return false
+
+      this.quiz = await dbCtx.quiz.latest(acct.id)
+
+      if (!this.quiz) {
+         await this.loadSubjects()
+         if (this.focusTopicIds.length === 0) {
+            messageCenter.addError('No topics selected for quiz.')
+            return true
+         } else {
+            this.quiz = await dbCtx.quiz.create(acct.id, acct.settings.defaultQuestionCount)
+         }
       }
-      this.setLocal()
-   }
 
+      // console.log('quiz',this.quiz)
+      if (this.quiz.allQuestionIds.length === this.quiz.answeredQuestionIds.length) {
+         this.quiz.completeDate = new Date().toISOString()
+         await dbCtx.quiz.update(this.quiz)
+         return true;
+      }
+      this.question = await dbCtx.question.get(this.getNextQuestionId())
+      return result
+   }
+   
    getNextQuestionId() {
       let unanswered = []
       this.quiz.allQuestionIds.forEach(q => {
@@ -130,326 +398,49 @@ class State {
       return unanswered[i]
    }
 
-   updateAnsweredQuestionIds(id) {
-      let i = this.quiz.answeredQuestionIds.indexOf(id)
-      if (i == -1) {
-         this.quiz.answeredQuestionIds.push(id)
-      }
-      if (this.quiz.answeredQuestionIds.length == this.quiz.allQuestionIds.length) {
-         this.quiz.completeDate = new Date().toISOString()
-      }
-      this.setLocal()
+   async updateAnsweredQuestionIds(id) {
+      this.quiz.answeredQuestionIds.push(id)
+      await dbCtx.quiz.update(this.quiz)
+      this.question = { id: 0, shortPhrase: null , phrase: null, answer: null }
+   }
 
+   /**
+    * Looks for the latest quiz. If it is not complete. It marks the
+    * complete date and updates the quiz.
+    * Then creates a new quiz.
+    */
+   async createNewQuiz() {
+      let latest = await dbCtx.quiz.latest(this.account.id)
+      if (latest && !latest.completeDate) {
+         latest.completeDate = new Date().toISOString()
+         await dbCtx.quiz.update(latest)
+      }
+      await dbCtx.quiz.create(this.account.id, this.account.settings.defaultQuestionCount)
    }
 
    //#endregion
 
-   //#region AccountSubjects
+   //#region Stats Page
 
-   _selectedSubjectId = 0
-   get selectedSubjectId() {
-      return this._selectedSubjectId
-   }
-   set selectedSubjectId(id) {
-      if (this._selectedSubjectId == id) return
-      this._selectedSubjectId = id
-      this.selectedTopicId = 0
-      this.topics = []
-      this.selectedQuestionId = 0
-      this.questions = []
-      this.setLocal()
-   }
-
-   get selectedSubject() {
-      let result = {}
-      this.accountSubjects.forEach(sub => {
-         if (sub.id == this.selectedSubjectId) {
-            result = sub
-         }
-      })
-      return result
-   }
-
-   _accountSubjects = []
-   get accountSubjects()
-   {
-      if (!this._accountSubjects) this._accountSubjects = []
-      return this._accountSubjects
-   }
-   set accountSubjects(data)
-   {
-      this._accountSubjects = data.length ? data : []
-      let unsetSelectedSubjectId = true
-      this._accountSubjects.forEach(subject => {
-         // subject.focusTopicIds = JSON.parse(subject.focusTopicIds)
-         if (subject.id == this._selectedSubjectId) unsetSelectedSubjectId = false
-      });
-      if (unsetSelectedSubjectId) this.selectedSubjectId = 0
-      this.accountSubjects.sort((a,b) => {
-         return a.title.localeCompare(b.title)
-      })
-      this.setLocal()
-   }
-
-   addNewAccountSubject(data) {
-      this.selectedSubjectId = data.id
-      this.accountSubjects.push(data)
-      this.accountSubjects.sort((a,b) => {
-         return a.title.localeCompare(b.title)
-      })
-      this.clearTopicsAndQuestions()
-      this.setLocal()
-   }
-
-   updateAccountSubject(data) {
-      this.selectedSubjectId = data.id
-      let i = this.accountSubjects.findIndex((e) => {
-         e.id == data.id
-      })
-      this.accountSubjects[i] = data
-      this.accountSubjects.sort((a,b) => {
-         return a.title.localeCompare(b.title)
-      })
-      this.setLocal()
-   }
-
-   deleteAccountSubject(id) {
-      this.selectedSubjectId = 0
-      let i = this.accountSubjects.findIndex((e) => {
-         e.id == id
-      })
-      this.accountSubjects.splice(i,1)
-      this.selectedTopicId = 0
-      this.topics = []
-      this.selectedQuestionId = 0
-      this.questions = []
-      this.setLocal()
-   }
-
-   //#endregion
-
-   //#region Topics
-
-   _selectedTopicId = 0
-   get selectedTopicId() {
-      return this._selectedTopicId
-   }
-   set selectedTopicId(id) {
-      if (this._selectedTopicId == id) return
-      this._selectedTopicId = id
-      this.selectedQuestionId = 0
-      this.questions = []
-      this.setLocal()
-   }
-
-   _topics = []
-   get topics()
-   {
-      if (!this._topics) this._topics = []
-      return this._topics
-   }
-   set topics(data)
-   {
-      this._topics = data.length ? data : []
-      this.topics.sort((a,b) => {
-         return a.title.localeCompare(b.title)
-      })
-      this.setLocal()
-   }
-
-   toggleFocusTopic(id) {
-      let i = this.selectedSubject.focusTopicIds.indexOf(id)
-      if (i > -1) {
-         this.selectedSubject.focusTopicIds.splice(i, 1)
-      } else {
-         this.selectedSubject.focusTopicIds.push(id)
+   async loadStatsPage() {
+      switch (this.statsView) {
+         case statsViews.QUESTION:
+            this.questionAnswers = await dbCtx.questionAnswer.byAccountId(this.account.id)
+            break
+         case statsViews.QUIZ:
+            this.quizes = await dbCtx.quiz.byAccountId(this.account.id)
+            break
+         default:
+            messageCenter.addError('Error loading Stats.')
+            break
       }
-      this.setLocal()
+
+
+      this.quizes = await dbCtx.quiz.byAccountId(this.account.id)
    }
 
-   addNewTopic(data) {
-      this.selectedTopicId = data.id
-      this.topics.push(data)
-      this.topics.sort((a,b) => {
-         return a.title.localeCompare(b.title)
-      })
-      this.selectedQuestionId = 0
-      this.questions = []
-      this.setLocal()
-   }
-
-   updateTopic(data) {
-      this.selectedTopicId = data.id
-      let i = this.topics.findIndex((e) => {
-         e.id == data.id
-      })
-      this.topics[i] = data
-      this.topics.sort((a,b) => {
-         return a.title.localeCompare(b.title)
-      })
-      this.setLocal()
-   }
-
-   deleteTopic(data) {
-      let result = false
-      this.selectedTopicId = 0
-      let i = this.topics.findIndex((e) => {
-         e.id == data.id
-      })
-      this.topics.splice(i,1)
-
-      i = this.selectedSubject.focusTopicIds.indexOf(data.id)
-      if (i > -1) {
-         result = true
-         this.selectedSubject.focusTopicIds.splice(i, 1)
-      }
-      this.setLocal()
-      return result
-   }
-
-   //#endregion
-
-   //#region Questions
-
-   _selectedQuestionId = 0
-   get selectedQuestionId() {
-      return this._selectedQuestionId
-   }
-   set selectedQuestionId(id) {
-      if (this._selectedQuestionId == id) return
-      this._selectedQuestionId = id
-   }
-
-   _questions = []
-   get questions()
-   {
-      if (!this._questions) this._questions = []
-      return this._questions
-   }
-   set questions(data)
-   {
-      this._questions = data.length ? data : []
-      this.setLocal()
-   }
-
-   addQuestion(data) {
-      this.selectedQuestionId = data.id
-      this.questions.push(data)
-      this.questions.sort((a,b) => {
-         return a.shortPhrase.localeCompare(b.shortPhrase)
-      })
-      this.setLocal()
-   }
-
-   updateQuestion(data) {
-      this.selectedQuestionId = data.id
-      let i = this.questions.findIndex((e) => {
-         e.id == data.id
-      })
-      this.questions[i] = data
-      this.questions.sort((a,b) => {
-         return a.shortPhrase.localeCompare(b.shortPhrase)
-      })
-      this.setLocal()
-   }
-
-   deleteQuestion(data) {
-      this.selectedQuestionId = 0
-      let i = this.questions.findIndex((e) => {
-         e.id == data.id
-      })
-      this.questions.splice(i,1)
-      this.setLocal()
-   }
-
-   _question = false
-   get question() {
-      if (!this._question) {
-         this._question = {
-            id: 0,
-            shortPhrase: '',
-            phrase: '',
-            answer: ''
-         }
-      }
-      return this._question
-   }
-   set question(data) {
-      if (data) {
-         let _id = data.hasOwnProperty('id') ? data.id : 0
-         let _shortPhrase = data.hasOwnProperty('shortPhrase') ? data.shortPhrase : ''
-         let _phrase = data.hasOwnProperty('phrase') ? data.phrase : ''
-         let _answer = data.hasOwnProperty('answer') ? data.answer : ''
-
-         this._question = {
-            id: _id,
-            shortPhrase: _shortPhrase,
-            phrase: _phrase,
-            answer: _answer
-         }
-         this.setLocal()
-      }
-   }
-
-   //#endregion
-
-   clearTopicsAndQuestions() {
-      this.selectedTopicId = 0
-      this.topics = []
-      this.selectedQuestionId = 0
-      this.questions = []
-   }
-
-   //#region Browser Local Storage
-
-   getLocal() {
-      let local = localStorage.getItem(this.name)
-      if (local == null)
-      {
-         this._currentPage = pages.HOME
-         this._quiz = new Quiz()
-         this._selectedSubjectId = 0
-         this._accountSubjects = []
-         this._selectedTopicId = 0
-         this._topics = []
-         this._selectedQuestionId = 0
-         this._questions = []
-         this._question = false
-      }
-      else
-      {
-         local = JSON.parse(local)
-         this._currentPage = local.currentPage
-         this._quiz = new Quiz(local.quiz)
-         this._selectedSubjectId = local.selectedSubjectId
-         this._accountSubjects = local.accountSubjects
-         this._selectedTopicId = local.selectedTopicId
-         this._topics = local.topics
-         this._selectedQuestionId = local.selectedQuestionId
-         this._questions = local.questions
-         this._question = local.question
-      }
-      this.setLocal()
-   }
-
-   setLocal()
-   {
-      localStorage.setItem(this.name,this.toJson())
-   }
-
-   toJson()
-   {
-      return `{
-         "currentPage": "${this.currentPage}",
-         "quiz": ${JSON.stringify(this.quiz)},
-         "selectedSubjectId": "${this.selectedSubjectId}",
-         "accountSubjects": ${JSON.stringify(this.accountSubjects)},
-         "selectedTopicId": "${this.selectedTopicId}",
-         "topics": ${JSON.stringify(this.topics)},
-         "selectedQuestionId": "${this.selectedQuestionId}",
-         "questions": ${JSON.stringify(this.questions)},
-         "question": ${JSON.stringify(this.question)}
-      }`
+   get statsView() {
+      return this.account?.state.statsView ?? statsViews.QUESTION
    }
 
    //#endregion

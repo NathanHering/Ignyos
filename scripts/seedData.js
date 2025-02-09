@@ -1,10 +1,10 @@
 class SeedData {
-   constructor(sCount = 4, tCount = 4, qCount = 4) {
+   constructor(acctName = "", sCount = 4, tCount = 4, qCount = 4) {
       this.sCount = sCount
       this.tCount = tCount
       this.qCount = qCount
-
-      this.account = new Account({name:newId(8)}) // N.Hügelhaus
+      if (!acctName) { acctName = newId(4) }
+      this.account = new Account({name:acctName}) // N.Hügelhaus
       this.subjects = []
       this.acctSubs = []
       this.topics = []
@@ -12,7 +12,7 @@ class SeedData {
 
       for (let s = 1; s <= this.sCount; s++) {
          let subject = new Subject({
-            title:`${s}`
+            title:`${acctName} ${s}`
          })
          this.subjects.push(subject)
 
@@ -25,16 +25,18 @@ class SeedData {
          for (let t = 1; t <= this.tCount; t++) {
             let topic = new Topic({
                subjectId:subject.id,
-               title:`${s}.${t}`
+               title:`${acctName} ${s}.${t}`,
+               questionCount:this.qCount
             })
             this.topics.push(topic)
 
             for (let q = 1; q <= this.qCount; q++) {
-               let txt = `${s}.${t}.${q}`
+               let txt = `${acctName} ${s}.${t}.${q}`
                let question = new Question({
                   topicId:topic.id,
                   shortPhrase:txt,
-                  phrase:`Q: ${txt}`
+                  phrase:`Q: ${txt}`,
+                  answer:`A: ${txt}`
                })
                this.questions.push(question)
             }
@@ -57,7 +59,23 @@ class SeedData {
       })
 
       this.questions.forEach(async question => {
+         question.id = await newQuestionId()
          await dbCtx.question.add(question)
       })
    }
+}
+
+async function addSeedData() {
+   const accts = await dbCtx.account.all()
+   if (accts.length > 0) {
+      console.log('Seed data already exists.')
+      return
+   }
+   let seed;
+   const names = ['a', 'b', 'c', 'd']
+   for (let i = 0; i < names.length; i++) {
+      seed = new SeedData(names[i], 4, 4, 4)
+      await seed.save()
+   }
+   app.route()
 }

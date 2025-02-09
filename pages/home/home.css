@@ -1,3 +1,18 @@
+body {
+    background-color: rgb(30,35,40);
+    display: grid;
+    grid-template-rows: 48px 1fr;
+    grid-template-columns: auto;
+    grid-template-areas: "site-header" "page";
+    height: 100%;
+    color: #ddd;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
 #page {
    background-color: rgb(30,35,40);
    color: rgb(206, 206, 206);

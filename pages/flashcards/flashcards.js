@@ -2,33 +2,39 @@ page = {
    get element() {
       let ele = document.createElement('div')
       ele.id = 'page'
-      ele.appendChild(this.subjectPane)
-      ele.appendChild(this.topicPane)
-      ele.appendChild(this.questionPane)
+      ele.appendChild(navigation.element)
+      let panes = document.createElement('div')
+      panes.id = 'panes'
+      panes.appendChild(this.subjectPane)
+      panes.appendChild(this.topicPane)
+      panes.appendChild(this.questionPane)
+      ele.appendChild(panes)
       return ele
    },
 
    async load() {
-      await this.loadSubjects()
-      await this.loadTopics()
-      await this.loadQuestions()
+      this.populateSubjectList()
+      this.populateTopicList()
+      this.populateQuestionList()
+   },
+
+   async initNav() {
+      // if (!stateMgr.account) return
+      // if (stateMgr.account.state.currentPage == pages.HOME) return 
+      // if (stateMgr.account.state.currentPage == pages.STATS) return 
+      let nav = document.getElementById('nav')
+      if (nav) nav.remove()
+      let page = document.getElementById('page')
+      page.appendChild(navigation.element)
+      // document.body.appendChild(navigation.element)
    },
 
    //#region Subject Pane
-   
-   async loadSubjects()
-   {
-      state.accountSubjects = await dbCtx.accountSubject.list(state.currentAccount.id)
-      this.populateSubjectList()
-   },
 
-   async refreshSubjectPane(reload = false) {
+   async refreshSubjectPane() {
       document.getElementById('subject-pane').remove()
-      let page = document.getElementById('page')
-      page.appendChild(this.subjectPane)
-      if (reload) {
-         await this.loadSubjects()
-      }
+      let panes = document.getElementById('panes')
+      panes.appendChild(this.subjectPane)
       this.populateSubjectList()
    },
 
@@ -39,10 +45,6 @@ page = {
       ele.appendChild(this.getPaneHeader('S U B J E C T'))
       ele.appendChild(this.subjectPaneControls)
       ele.appendChild(this.subjectList)
-      if (state.selectedSubjectId == "0") {
-         state.selectedTopicId = 0
-         state.topics = [] 
-      }
       return ele
    },
 
@@ -92,12 +94,12 @@ page = {
       let val = document.getElementById('new-subject').value.trim()
       if (val == '') return
       let newSubject = new Subject({title: val})
-      let newAcctSub = new AccountSubject({accountId: state.currentAccount.id, subjectId: newSubject.id})
+      let newAcctSub = new AccountSubject({accountId: stateMgr.account.id, subjectId: newSubject.id})
       let subListItem = new SubjectListItem(newAcctSub,newSubject)
       await dbCtx.subject.add(newSubject)
       await dbCtx.accountSubject.add(newAcctSub)
-      state.addNewAccountSubject(subListItem)
-      await this.refreshSubjectPane(true)
+      await stateMgr.addNewAccountSubject(subListItem)
+      await this.refreshSubjectPane()
       await this.refreshTopicPane()
       await this.refreshQuestionPane()
    },
@@ -113,14 +115,14 @@ page = {
       let subList = document.getElementById('subject-list')
       subList.innerHTML = null
       subList.classList.remove('v-loading')
-      state.accountSubjects.forEach(aSub => {
+      stateMgr.subjects.forEach(aSub => {
          subList.appendChild(this.subjectListItem(aSub))
       })
    },
 
    subjectListItem(subject) {
       let ele = document.createElement('div')
-      ele.id = `sub-${subject.id}`
+      ele.id = `sub-${subject.subjectId}`
 
       let txt = document.createElement('div')
       txt.innerText = subject.title
@@ -130,14 +132,16 @@ page = {
       if (subject.focusTopicIds.length > 0) focus.innerText = '*'
       ele.appendChild(focus)
 
-      if (state.selectedSubjectId == subject.id) {
+      if (stateMgr.account.state.selectedSubjectId == subject.subjectId) {
          ele.classList.add('item-selected')
          ele.appendChild(this.editSubjectBtn(subject))
          ele.appendChild(this.deleteSubjectBtn(subject))
       } else {
          ele.classList.add('item')
          ele.addEventListener('click', async () => {
-            state.selectedSubjectId = subject.id
+            await stateMgr.setSubjectId(subject.subjectId)
+            await stateMgr.loadTopics()
+            await stateMgr.loadQuestions()
             await this.refreshSubjectPane()
             await this.refreshTopicPane(true)
             await this.refreshQuestionPane()
@@ -150,7 +154,7 @@ page = {
       let ele = document.createElement('div')
       ele.classList.add('edit')
       ele.addEventListener('click', () => {
-         let item = document.getElementById(`sub-${subject.id}`)
+         let item = document.getElementById(`sub-${subject.subjectId}`)
          let edit = this.subjectListItemEditing(subject)
          item.replaceWith(edit)
          document.getElementById('edit-subject').focus()
@@ -170,10 +174,8 @@ page = {
    },
 
    async deleteSubject(subject) {
-      subject.deletedDate = new Date().toISOString()
-      await dbCtx.subject.update(subject)
-      await dbCtx.accountSubject.delete(state.currentAccount.id,subject.id)
-      state.deleteAccountSubject(subject.id)
+      await stateMgr.deleteAccountSubject(subject)
+      app.hideModal()
       await this.refreshSubjectPane()
       await this.refreshTopicPane()
       await this.refreshQuestionPane()
@@ -181,7 +183,7 @@ page = {
 
    subjectListItemEditing(subject) {
       let ele = document.createElement('div')
-      ele.id = `sub-${subject.id}`
+      ele.id = `sub-${subject.subjectId}`
       ele.classList.add('item-editing')
       ele.appendChild(this.getEditSubjectInput(subject))
       ele.appendChild(this.getEditSubjectButton(subject))
@@ -220,39 +222,21 @@ page = {
       let val = document.getElementById('edit-subject').value.trim()
       if (val == '') return
       subject.title = val
-      if (await dbCtx.subject.update(subject))
-      {
-         state.updateAccountSubject(subject)
-         await this.refreshSubjectPane()
-         await this.refreshTopicPane()
-         await this.refreshQuestionPane()
-      }
+      await stateMgr.updateAccountSubject(subject)
+      await this.refreshSubjectPane()
+      await this.refreshTopicPane()
+      await this.refreshQuestionPane()
    },
 
    //#endregion
 
    //#region Topic Pane
-   
-   async loadTopics()
-   {
-      if (state.selectedSubjectId == "0") {
-         state.selectedTopicId = 0
-         state.topics = []
-      } else {
-         state.topics = await dbCtx.topic.all(state.selectedSubjectId)
-         this.populateTopicList()
-      }
-   },
 
-   async refreshTopicPane(reload = false) {
+   async refreshTopicPane() {
       document.getElementById('topic-pane').remove()
-      let page = document.getElementById('page')
+      let page = document.getElementById('panes')
       page.appendChild(this.topicPane)
-      if (reload) {
-         await this.loadTopics()
-      } else {
-         this.populateTopicList()
-      }
+      this.populateTopicList()
    },
 
    get topicPane() {
@@ -260,7 +244,7 @@ page = {
       ele.id = 'topic-pane'
       ele.classList.add('pane')
       ele.appendChild(this.getPaneHeader('T O P I C'))
-      if (state.selectedSubjectId != 0) {
+      if (stateMgr.account.state.selectedSubjectId) {
          ele.appendChild(this.topicPaneControls)
          ele.appendChild(this.topicList)
       }
@@ -312,11 +296,11 @@ page = {
    async createTopic() {
       let val = document.getElementById('new-topic').value.trim()
       if (val == '') return
-      let newTopic = new Topic({subjectId: state.selectedSubjectId, title: val})
+      let newTopic = new Topic({subjectId: stateMgr.account.state.selectedSubjectId, title: val})
       await dbCtx.topic.add(newTopic)
-      state.addNewTopic(newTopic)
-      this.refreshTopicPane()
-      this.refreshQuestionPane()
+      await stateMgr.addNewTopic(newTopic)
+      await this.refreshTopicPane()
+      await this.refreshQuestionPane()
    },
 
    get topicList() {
@@ -331,7 +315,7 @@ page = {
       if (!topicList) return
       topicList.innerHTML = null
       topicList.classList.remove('v-loading')
-      state.topics.forEach(topic => {
+      stateMgr.topics.forEach(topic => {
          topicList.appendChild(this.topicListItem(topic))
       })
    },
@@ -346,39 +330,44 @@ page = {
       txt.innerText = topic.title
       ele.appendChild(txt)
 
-      if (state.selectedTopicId == topic.id) {
+      if (stateMgr.topicId == topic.id) {
          ele.classList.add('item-selected')
          ele.appendChild(this.editTopicBtn(topic))
          ele.appendChild(this.deleteTopicBtn(topic))
       } else {
          ele.classList.add('item')
          ele.addEventListener('click', async () => {
-            state.selectedTopicId = topic.id
-            this.refreshTopicPane()
-            this.refreshQuestionPane(true)
+            await stateMgr.setTopicId(topic.id)
+            await this.refreshTopicPane()
+            await this.refreshQuestionPane()
          })
       }
       return ele
    },
 
    getFocusTopicBtn(topic) {
+      // console.log('getFocusTopicBtn',topic)
       let ele = document.createElement('div')
       ele.classList.add('focus-btn')
-      if (state.selectedSubject.focusTopicIds.includes(topic.id)) {
+
+      if (stateMgr.accountSubject?.focusTopicIds.includes(topic.id)) {
          ele.innerText = '*'
+         ele.title = 'This topic is currently in focus.'
+      } else {
+         ele.title = 'Click to focus on this topic.'
       }
-      ele.addEventListener('click', async (event) => {
-         event.stopImmediatePropagation()
-         state.toggleFocusTopic(topic.id)
-         let acctSub = {
-            accountId: state.currentAccount.id,
-            subjectId: state.selectedSubjectId,
-            focusTopicIds: state.selectedSubject.focusTopicIds
-         }
-         await dbCtx.accountSubject.update(acctSub)
-         await this.refreshSubjectPane()
-         await this.refreshTopicPane()
-      })
+      if (topic.questionCount > 0) {
+         ele.addEventListener('click', async (event) => {
+            event.stopImmediatePropagation()
+            await stateMgr.toggleFocusTopic(topic.id)
+            await this.initNav()
+            await this.refreshSubjectPane()
+            await this.refreshTopicPane()
+         })
+      } else {
+         ele.classList.add('disabled')
+         ele.title = 'Add questions to focus on this topic.'
+      }
       return ele
    },
 
@@ -406,19 +395,10 @@ page = {
    },
 
    async deleteTopic(topic) {
-      topic.deletedDate = new Date().toISOString()
-      if (await dbCtx.topic.update(topic)) {
-         if (state.deleteTopic(topic)) {
-            let acctSub = {
-               accountId: state.currentAccount.id,
-               subjectId: state.selectedSubjectId,
-               focusTopicIds: state.selectedSubject.focusTopicIds
-            }
-            await dbCtx.accountSubject.update(acctSub)
-         }
-      }
-      this.refreshTopicPane()
-      this.refreshQuestionPane()
+      await stateMgr.deleteTopic(topic)
+      app.hideModal()
+      await this.refreshTopicPane()
+      await this.refreshQuestionPane()
    },
 
    topictListItemEditing(topic) {
@@ -461,45 +441,28 @@ page = {
    async editTopic(topic) {
       let val = document.getElementById('edit-topic').value.trim()
       if (val == '') return
-      topic.subjectId = state.selectedSubjectId
       topic.title = val
-      await dbCtx.topic.update(topic)
-      state.updateTopic(topic)
+      await stateMgr.updateTopic(topic)
       this.refreshTopicPane(true)
+   },
+
+   async refreshQuestionPane() {
+      document.getElementById('question-pane').remove()
+      let panes = document.getElementById('panes')
+      panes.appendChild(this.questionPane)
+      this.populateQuestionList()
    },
 
    //#endregion
 
    //#region Question Pane
-   
-   async loadQuestions()
-   {
-      if (state.selectedTopicId == "0") {
-         state.selectedQuestionId = 0
-         state.questions = []
-      } else {
-         state.questions = await dbCtx.question.byTopicId(state.selectedTopicId)
-         this.populateQuestionList()
-      }
-   },
-
-   async refreshQuestionPane(reload = false) {
-      document.getElementById('question-pane').remove()
-      let page = document.getElementById('page')
-      page.appendChild(this.questionPane)
-      if (reload) {
-         await this.loadQuestions()
-      } else {
-         this.populateQuestionList()
-      }
-   },
 
    get questionPane() {
       let ele = document.createElement('div')
       ele.id = 'question-pane'
       ele.classList.add('pane')
       ele.appendChild(this.getPaneHeader('Q U E S T I O N'))
-      if (state.selectedTopicId != 0) {
+      if (stateMgr.topicId) {
          ele.appendChild(this.questionPaneControls)
          ele.appendChild(this.questionList)
       }
@@ -551,9 +514,11 @@ page = {
    async initNewQuestion() {
       let val = document.getElementById('new-question')?.value.trim()
       if (!val || val == '') return
-      state.selectedQuestionId = 0
+      let newQuestion = new Question({topicId: stateMgr.topicId, shortPhrase: val})
+      newQuestion['isNew'] = true
+      stateMgr.question = newQuestion
       document.getElementById('new-question').value = ''
-      await this.showQuestionModal({ id: false, shortPhrase: val })
+      await this.showQuestionModal(stateMgr.question)
    },
 
    get questionList() {
@@ -568,9 +533,9 @@ page = {
       if (questionList) {
          questionList.innerHTML = null
          questionList.classList.remove('v-loading')
-         state.questions.forEach(question => {
+         stateMgr.questions.forEach(question => {
             questionList.appendChild(this.questionListItem(question))
-      })
+         })
       }
    },
 
@@ -578,15 +543,16 @@ page = {
       let ele = document.createElement('div')
       ele.id = `que-${question.id}`
       ele.innerText = question.shortPhrase
-      if (state.selectedQuestionId == question.id) {
+      if (stateMgr.accountSubject.selectedQuestion[stateMgr.topicId] == question.id) {
          ele.classList.add('item-selected')
          ele.appendChild(this.editQuestionBtn(question))
          ele.appendChild(this.deleteQuestionBtn(question))
       } else {
          ele.classList.add('item')
          ele.addEventListener('click', async () => {
-            state.selectedQuestionId = question.id
-            this.refreshQuestionPane()
+            await stateMgr.setQuestion(question)
+            await dbCtx.accountSubject.update(stateMgr.accountSubject)
+            await this.refreshQuestionPane()
          })
       }
       return ele
@@ -596,7 +562,8 @@ page = {
       let ele = document.createElement('div')
       ele.classList.add('edit')
       ele.addEventListener('click', async () => {
-         await this.showQuestionModal(question)
+         stateMgr.question = question
+         await this.showQuestionModal()
       })
       return ele
    },
@@ -613,54 +580,42 @@ page = {
    },
 
    async deleteQuestion(question) {
-      question.deletedDate = new Date().toISOString()
-      if (await dbCtx.question.update(question)) {
-         state.deleteQuestion(question)
-      }
+      await stateMgr.deleteQuestion(question)
       app.hideModal()
-      this.refreshQuestionPane(true)
+      if (stateMgr.topic?.questionCount == 0) {
+         await this.refreshSubjectPane()
+         await this.refreshTopicPane()
+      }
+      await this.refreshQuestionPane(true)
    },
 
    //#endregion
 
    //#region Question Modal
 
-   async showQuestionModal(question)
+   async showQuestionModal()
    {
       document.getElementById('site-header').classList.add('blur')
       document.getElementById('nav').classList.add('blur')
-      await this.loadQuestion(question)
-      app.formModal('question-modal-bg', this.getQuestionModal(question))
+      app.formModal('question-modal-bg', this.getQuestionModal())
    },
 
-   async loadQuestion(question) {
-      if (question.id !== false) {
-         question = await dbCtx.question.get(question.id)
-         if (question) {
-            state.question = question
-         } else {
-            app.messageCenter.addError('The selected question could not be found.')
-         }
-      }
-      document.getElementById('new-question').value = ''
-   },
-
-   getQuestionModal(question) {
+   getQuestionModal() {
       let sp = document.createElement('input')
       sp.id = 'short-phrase'
       sp.type = 'text'
-      sp.value = question.shortPhrase
+      sp.value = stateMgr.question.shortPhrase
 
       let ph = document.createElement('textarea')
       ph.id = 'phrase'
       ph.placeholder = 'Enter the full phrasing of the question here.'
       ph.rows = 5
-      ph.innerText = question.phrase ?? ''
+      ph.innerText = stateMgr.question.phrase ?? ''
 
       let an = document.createElement('textarea')
       an.id = 'answer'
       an.placeholder = 'Enter the answer to the question here.'
-      an.innerText = question.answer ?? ''
+      an.innerText = stateMgr.question.answer ?? ''
 
       let frm = document.createElement('div')
       frm.classList.add('question-form')
@@ -682,6 +637,7 @@ page = {
       save.classList.add('save')
       save.addEventListener('click', async () => {
          await this.saveQuestion()
+         await this.refreshTopicPane()
       })
 
       let cancel = document.createElement('div')
@@ -705,26 +661,15 @@ page = {
       let form = this.questionForm
       if (form.isValid())
       {
-         if (form.id == 0) {
+         if (stateMgr.question.isNew) {
             let newQuestion = new Question(form)
-            newQuestion.id = newId(4)
-            let i = 0;
-            while (await dbCtx.question.exists(newQuestion.id) && i < 10) {
-               newQuestion.id = newId(4)
-               i++
-            }
-            if (i >= 10) {
-               messageCenter.addError('Could not create a new question. Please try again.')
-               return
-            }
-            await dbCtx.question.add(newQuestion)
-            state.addQuestion(newQuestion)
+            newQuestion.id = await newQuestionId()
+            await stateMgr.addQuestion(newQuestion)
          } else {
             let updatedQuestion = new Question(form)
-            await dbCtx.question.update(updatedQuestion)
-            state.updateQuestion(updatedQuestion)
+            await stateMgr.updateQuestion(updatedQuestion)
          }
-         this.refreshQuestionPane(true)
+         await this.refreshQuestionPane()
          document.getElementById('site-header').classList.remove('blur')
          document.getElementById('nav').classList.remove('blur')
          app.hideModal()
@@ -754,8 +699,8 @@ page = {
       }
 
       return {
-         'id': state.selectedQuestionId,
-         'topicId': state.selectedTopicId,
+         'id': stateMgr.question.id,
+         'topicId': stateMgr.topicId,
          'shortPhrase': shortPhrase,
          'phrase': phrase,
          'answer': answer,
@@ -784,4 +729,36 @@ page = {
 
       return ele
    },
+}
+
+navigation = {
+   get element() {
+      let n = document.getElementById('nav')
+      if (n) n.remove()
+      n = document.createElement('div')
+      n.id = 'nav'
+      // n.classList.add('standard')
+      n.appendChild(this.quizBtn)
+      return n
+   },
+
+   get quizBtn() {
+      const enabled = this.quizBtnEnabled
+      let ele = getNavItemPill("Quiz Me!", enabled)
+      ele.id = 'create-quiz'
+      if (enabled) {
+         ele.addEventListener('click', async () => {
+            await stateMgr.createNewQuiz()
+            await stateMgr.setPage(pages.QUIZ)
+            await app.route()
+         })
+      }
+      return ele
+   },
+
+   get quizBtnEnabled() {
+      const isQuizPage = stateMgr.account?.currentPage == pages.QUIZ
+      const canCreateQuiz = stateMgr.focusTopicIds.length > 0
+      return !isQuizPage && canCreateQuiz
+   }
 }

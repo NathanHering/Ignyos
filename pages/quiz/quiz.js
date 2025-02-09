@@ -1,24 +1,22 @@
 page = {
    get element() {
+      // console.log('element')
       let ele = document.createElement('div')
       ele.id = 'page'
+      ele.appendChild(navigation.element)
       ele.appendChild(this.quizPane)
       return ele
    },
 
    async load() {
-      // if (state.quiz.completeDateUTC) {
-      //    await this.loadQuizResults()
-      // } else {
-         await this.loadNextQuestion()
-      // }
+      await this.loadNextQuestion()
    },
 
    get quizPane() {
+      // console.log('quizPane')
       let ele = document.createElement('div')
       ele.id = 'quiz-pane'
-      ele.classList.add('without-answer')
-      ele.classList.add('without-answer')
+      ele.classList.add('in-progress')
       ele.appendChild(this.questionEle)
       ele.appendChild(this.answerEle)
       ele.appendChild(this.questionControls)
@@ -27,47 +25,16 @@ page = {
 
    //#region Quiz Results
 
-   async loadQuizResults() {      
+   loadQuizResults(questions) {
       let pane = document.getElementById('quiz-pane')
-      pane.classList.remove('without-answer')
-      pane.classList.remove('with-answer')
+      pane.classList.remove('in-progress')
       pane.classList.add('results')
       pane.innerHTML = null
-      document.getElementById('nav').innerHTML = null
-      
-      // let response = await api.GET('ignyos/quiz/results',[['id',state.quiz.id]])
-      // let questions = app.processApiResponse(response)
-      let questions = await dbCtx.quiz.results(state.currentAccount.id, state.quiz.id)
-      
-      pane.appendChild(this.getSummaryEle(questions))
       pane.appendChild(this.getQuestionList(questions))
    },
 
-   getSummaryEle(questions) {
-      let count = questions.length
-      let correct = 0
-      questions.forEach(question => { if (question.correct) correct++ })
-
-      let ele = document.createElement('div')
-      ele.id = 'quiz-summary'
-
-      let sEle = document.createElement('div')
-      sEle.classList.add('info')
-      sEle.innerText = `${correct} out of ${count} correct.`
-      ele.appendChild(sEle)
-      ele.appendChild(this.closeSummaryButtton)
-      return ele
-   },
-
-   get closeSummaryButtton() {
-      let ele = document.createElement('div')
-      ele.classList.add('close')
-      ele.innerText = 'X'
-      ele.addEventListener('click',async () => await app.route())
-      return ele
-   },
-
    getQuestionList(questions) {
+      // console.log('getQuestionList',questions)
       let ele = document.createElement('div')
       ele.id = 'question-list'
       questions.forEach(question => {
@@ -77,6 +44,7 @@ page = {
    },
 
    getQuestionListItem(question) {
+      // console.log('getQuestionListItem',question)
       let ele = document.createElement('div')
       ele.classList.add('item')
       if (question.correct) {
@@ -93,26 +61,26 @@ page = {
    //#region Taking Quiz
 
    async loadNextQuestion() {
+      // console.log('loadNextQuestion')
       let q = document.getElementById('question')
       q.classList.add('v-loading')
-      let id = state.getNextQuestionId()
-      state.question = await dbCtx.question.get(id)
-      // let response = await api.GET('ignyos/question',[['id', id]])
-      // let data = app.processApiResponse(response)
-      // state.question = data
+      let id = stateMgr.getNextQuestionId()
+      stateMgr.question = await dbCtx.question.get(id)
       q.classList.remove('v-loading')
-      q.innerText = state.question.phrase
+      q.innerText = stateMgr.question.phrase
    },
 
    get questionEle() {
+      // console.log('questionEle')
       let ele = document.createElement('div')
       ele.id = 'question'
       ele.classList.add('info')
-      ele.innerText = state.question.phrase
+      ele.innerText = stateMgr.question.phrase
       return ele
    },
 
    get answerEle() {
+      // console.log('answerEle')
       let ele = document.createElement('div')
       ele.id = 'answer'
       ele.classList.add('info')
@@ -120,21 +88,24 @@ page = {
    },
 
    get questionControls() {
+      // console.log('questionControls')
       let ele = document.createElement('div')
       ele.id = 'controls'
+      ele.classList.add('invisible')
       ele.appendChild(this.correctBtn)
       ele.appendChild(this.incorrectBtn)
       return ele
    },
 
    showAnswer() {
-      let qp = document.getElementById('quiz-pane')
-      qp.classList.remove('without-answer')
-      qp.classList.add('with-answer')
-      document.getElementById('answer').innerText = state.question.answer
+      // console.log('showAnswer')
+      let qp = document.getElementById('controls')
+      qp.classList.remove('invisible')
+      document.getElementById('answer').innerText = stateMgr.question.answer
    },
    
    get correctBtn() {
+      // console.log('correctBtn')
       let ele = document.createElement('div')
       ele.classList.add('correct')
       ele.classList.add('btn')
@@ -146,6 +117,7 @@ page = {
    },
    
    get incorrectBtn() {
+      // console.log('incorrectBtn')
       let ele = document.createElement('div')
       ele.classList.add('incorrect')
       ele.classList.add('btn')
@@ -158,20 +130,18 @@ page = {
 
    async submitAnswer(correct) {
       let questionAnswer = new QuestionAnswer({
-         accountId: state.currentAccount.id,
-         questionId: state.question.id,
-         quizId: state.quiz.id,
+         accountId: stateMgr.account.id,
+         quizId: stateMgr.quiz.id,
+         questionId: stateMgr.question.id,
          answeredCorrectly: correct
       })
-      // let response = await api.POST('ignyos/quiz/answer',body)
-      // let data = app.processApiResponse(response)
-      // state.quiz = data
       await dbCtx.questionAnswer.add(questionAnswer)
-      state.updateAnsweredQuestionIds(state.question.id)
-      await dbCtx.quiz.update(state.quiz)
-      state.question = { id: 0, shortPhrase: null , phrase: null, answer: null }
-      if (state.quiz.completeDate !== null) {
-         await this.loadQuizResults()
+      await stateMgr.updateAnsweredQuestionIds(stateMgr.question.id)
+      if (stateMgr.quiz.allQuestionIds.length === stateMgr.quiz.answeredQuestionIds.length) {
+         let questions = await dbCtx.quiz.results(stateMgr.account.id, stateMgr.quiz.id)
+         await stateMgr.setPage(pages.FLASH_CARDS)
+         navigation.loadQuizResults(questions)
+         await this.loadQuizResults(questions)
       } else {
          await app.route()
       }
@@ -180,17 +150,93 @@ page = {
    //#endregion
 
    async quitQuiz() {
+      // console.log('quitQuiz')
       app.confirm(async () => {
-         await dbCtx.quiz.quit(state.currentAccount.id, state.quiz.id)
-         // let response = await api.POST('ignyos/quiz/quit',state.quiz.id)
-         // let data = app.processApiResponse(response)
-         state.quiz = {id: 0, startDateUTC: null, allQuestionIds: [], answeredQuestionIds: []}
-         if (data == false) {
-            messageCenter.addInfo('There may have been an error while quitting this quiz.')
-            setTimeout(async () => { await app.route() },5000)
-         } else {
-            await app.route()
-         }},
-         'Really?\n\nYou want to quit?')
+         await dbCtx.quiz.quit(stateMgr.account.id, stateMgr.quiz.id)
+         stateMgr.quiz = {id: 0, startDateUTC: null, allQuestionIds: [], answeredQuestionIds: []}
+         await stateMgr.setPage(pages.FLASH_CARDS)
+         await app.route()
+      },'Really?\n\nYou want to quit?')
    }
+}
+
+navigation = {
+   get element() {
+      let n = this.nav
+      n.appendChild(this.questionCounter)
+      n.appendChild(this.showAnswerBtn)
+      n.appendChild(this.quitQuizBtn)
+      return n
+   },
+
+   get nav() {
+      let nav = document.getElementById('nav')
+      if (nav) {
+         nav.innerHTML = null
+      } else {
+         nav = document.createElement('div')
+         nav.id = 'nav'
+      }
+      return nav
+   },
+
+   loadQuizResults(questions) {
+      console.log('loadQuizResults',questions)
+      let nav = document.getElementById('nav')
+      console.log('nav',nav)
+      nav.innerHTML = null
+      let summary = document.createElement('div')
+      let count = questions.length
+      let correct = questions.filter(q => q.correct).length
+      summary.innerText = `${correct} out of ${count} correct.`
+      summary.id = 'question-counter'
+
+      nav.appendChild(summary)
+      nav.appendChild(this.closeSummaryButtton)
+   },
+
+   get closeSummaryButtton() {
+      let ele = document.createElement('div')
+      ele.classList.add('pill')
+      ele.innerText = 'Close'
+      ele.addEventListener('click',async () => {
+         await stateMgr.setPage(pages.FLASH_CARDS)
+         await app.route()
+      })
+      return ele
+   },
+
+   get questionCounter() {
+      let ele = document.createElement('div')
+      let n = stateMgr.quiz.answeredQuestionIds.length + 1
+      let total = stateMgr.quiz.allQuestionIds.length
+      ele.innerText= `Question ${n} of ${total}`
+      ele.id = 'question-counter'
+      return ele
+   },
+
+   get showAnswerBtn() {
+      let ele = this.getNavItemPill("Show Answer")
+      ele.id = 'show-answer'
+      ele.addEventListener('click', () => {
+         page.showAnswer()
+      })
+      return ele
+   },
+
+   get quitQuizBtn() {
+      let ele = this.getNavItemPill("End Quiz")
+      ele.id = 'quit-quiz'
+      ele.addEventListener('click', async () => {
+         await page.quitQuiz()
+      })
+      return ele
+   },
+
+   getNavItemPill(text) {
+      let ele = document.createElement('div')
+      ele.innerText = text
+      ele.classList.add('pill')
+      return ele
+   },
 }
