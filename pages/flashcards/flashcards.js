@@ -107,14 +107,12 @@ page = {
    get subjectList() {
       let ele = document.createElement('div')
       ele.id = 'subject-list'
-      ele.classList.add('v-loading')
       return ele
    },
 
    populateSubjectList() {
       let subList = document.getElementById('subject-list')
       subList.innerHTML = null
-      subList.classList.remove('v-loading')
       stateMgr.subjects.forEach(aSub => {
          subList.appendChild(this.subjectListItem(aSub))
       })
@@ -306,7 +304,6 @@ page = {
    get topicList() {
       let ele = document.createElement('div')
       ele.id = 'topic-list'
-      ele.classList.add('v-loading')
       return ele
    },
 
@@ -314,7 +311,6 @@ page = {
       let topicList = document.getElementById('topic-list')
       if (!topicList) return
       topicList.innerHTML = null
-      topicList.classList.remove('v-loading')
       stateMgr.topics.forEach(topic => {
          topicList.appendChild(this.topicListItem(topic))
       })
@@ -523,7 +519,6 @@ page = {
    get questionList() {
       let ele = document.createElement('div')
       ele.id = 'question-list'
-      ele.classList.add('v-loading')
       return ele
    },
 
@@ -531,7 +526,6 @@ page = {
       let questionList = document.getElementById('question-list')
       if (questionList) {
          questionList.innerHTML = null
-         questionList.classList.remove('v-loading')
          stateMgr.questions.forEach(question => {
             questionList.appendChild(this.questionListItem(question))
          })

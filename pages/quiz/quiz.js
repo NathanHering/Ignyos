@@ -58,10 +58,8 @@ page = {
 
    async loadNextQuestion() {
       let q = document.getElementById('question')
-      q.classList.add('v-loading')
       let id = stateMgr.getNextQuestionId()
       stateMgr.question = await dbCtx.question.get(id)
-      q.classList.remove('v-loading')
       q.innerText = stateMgr.question.phrase
    },
 

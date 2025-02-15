@@ -431,7 +431,6 @@ class StateManager {
             break
       }
 
-
       this.quizes = await dbCtx.quiz.byAccountId(this.account.id)
    }
 

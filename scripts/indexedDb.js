@@ -558,25 +558,6 @@ const dbCtx = {
       }
    },
    quiz: {
-      // async get(id) {
-      //    try {
-      //       const store = getObjectStore(stores.QUIZ, "readonly");
-      //       const request = store.get(id);
-
-      //       return await new Promise((resolve, reject) => {
-      //          request.onsuccess = function(event) {
-      //             resolve(event.target.result);
-      //          };
-
-      //          request.onerror = function(event) {
-      //             reject("Quiz not found");
-      //          };
-      //       });
-      //    } catch (error) {
-      //       console.error(error);
-      //       return new Quiz();
-      //    }
-      // },
       async byAccountId(acctId) {
          try {
             const store = getObjectStore(stores.QUIZ, "readonly");
@@ -585,7 +566,8 @@ const dbCtx = {
 
             return await new Promise((resolve, reject) => {
                request.onsuccess = function(event) {
-                  resolve(event.target.result);
+                  const quizes = event.target.result;
+                  resolve(quizes.map(quiz => new Quiz(quiz)));
                };
 
                request.onerror = function(event) {
@@ -635,37 +617,6 @@ const dbCtx = {
             return false;
          }
       },
-      // /**
-      //  * Get the currently open quiz that matches the user account id and has not been completed.
-      //  * Returns false if no quiz is found.
-      //  * @param {string} acctId - The account of the active user.
-      //  * @returns {Quiz} The active quiz or false.
-      //  */
-      // async open(acctId) {
-      //    try {
-      //       const store = getObjectStore(stores.QUIZ, "readonly");
-      //       const index = store.index("accountId");
-      //       const request = index.get(acctId);
-
-      //       return new Promise((resolve, reject) => {
-      //          request.onsuccess = function(event) {
-      //             const quiz = event.target.result;
-      //             if (quiz && !quiz.completeDate) {
-      //                resolve(new Quiz(event.target.result));
-      //             } else {
-      //                resolve(false);
-      //             }
-      //          };
-
-      //          request.onerror = function(event) {
-      //             reject("Quiz not found");
-      //          };
-      //       });
-      //    } catch (error) {
-      //       console.error(error);
-      //       return false;
-      //    }
-      // },
       async create(acctId, questionCount) {
          try {
             const result = new Quiz({ accountId: acctId });
