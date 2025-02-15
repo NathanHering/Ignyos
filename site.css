@@ -375,7 +375,7 @@ background-repeat: no-repeat;
     row-gap: 10px;
     padding-top: 10px;
     position: absolute;
-    margin-left: 5rem;
+    right: 5rem;
     z-index: 2;
 }
 
@@ -384,8 +384,6 @@ background-repeat: no-repeat;
     animation-duration: 3.1s;
     width: fit-content;
     background-color: #000;
-    margin-left: auto;
-    margin-right: auto;
     border-radius: 6px;
     padding: 6px;
 }
