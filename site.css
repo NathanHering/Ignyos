@@ -203,18 +203,6 @@ li:hover .disabled {
     grid-area: quit-quiz;
     border: .1rem solid rgba(70, 163, 255, .8);
 }
-/* 
-#study-material {
-    grid-area: study-material;
-} */
-
-/* #stats {
-    grid-area: stats;
-} */
-
-/* #settings {
-    grid-area: gear;
-} */
 
 #page {
     grid-area: page;
