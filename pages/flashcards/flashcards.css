@@ -31,25 +31,8 @@
 }
 
 .pane .header {
-   display: grid;
-   grid-template-columns: 1fr auto 1fr;
    height: 24px;
-}
-
-.pane .header .left-line {
-   height: 3px;
-   margin: 6px 12px 0 6px;
-   background: linear-gradient(270deg, #222 4px, transparent 4px, transparent 8px, #222 8px, transparent);
-}
-
-.pane .header .txt {
-   color: #ddd;
-}
-
-.pane .header .right-line {
-   height: 3px;
-   margin: 6px 6px 0 12px;
-   background: linear-gradient(90deg, #222 4px, transparent 4px, transparent 8px, #222 8px, transparent);
+   text-align: center;
 }
 
 /*#region Subject Pane */

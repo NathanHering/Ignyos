@@ -706,19 +706,7 @@ page = {
    getPaneHeader(name) {
       let ele = document.createElement('div')
       ele.classList.add('header')
-
-      let left = document.createElement('div')
-      left.classList.add('left-line')
-      ele.appendChild(left)
-
-      let txt = document.createElement('div')
-      txt.classList.add('txt')
-      txt.innerText = name
-      ele.appendChild(txt)
-
-      let right = document.createElement('div')
-      right.classList.add('right-line')
-      ele.appendChild(right)
+      ele.innerText = name
 
       return ele
    },
@@ -730,7 +718,6 @@ navigation = {
       if (n) n.remove()
       n = document.createElement('div')
       n.id = 'nav'
-      // n.classList.add('standard')
       n.appendChild(this.quizBtn)
       return n
    },
