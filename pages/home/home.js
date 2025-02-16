@@ -15,12 +15,7 @@ page = {
    get title() {
       let ele = document.createElement('div')
 
-      // let welcome = document.createElement('h3')
-      // welcome.innerHTML = "&nbsp;Welcome <span style='font-size:0.4em'>to</span>"
-      // welcome.style.color = '#898989'
-      // ele.appendChild(welcome)
-
-      let subtitle = document.createElement('h2')
+      let subtitle = document.createElement('h1')
       subtitle.innerText = "Flash Cards"
       ele.appendChild(subtitle)
 
@@ -34,13 +29,13 @@ page = {
    get tagLine() {
       let ele = document.createElement('h3')
       
-      let learn = document.createElement('h3')
-      learn.innerHTML = "&nbsp;Learning <span style='font-size:0.4em;color:#898989'>by</span>"
+      let learn = document.createElement('h1')
+      learn.innerHTML = "Learning"
       
       ele.appendChild(learn)
 
       let reinforcement = document.createElement('h5')
-      reinforcement.innerText = "Reinforcement"
+      reinforcement.innerHTML = "<span style='font-size:0.4em;vertical-align:top;top:.5em;position:relative;'>by</span>  Reinforcement"
       reinforcement.style.color = '#898989'
       ele.appendChild(reinforcement)
       
