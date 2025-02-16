@@ -286,7 +286,7 @@ class SiteHeader {
       
       enabled = stateMgr.account?.state?.currentPage != pages.QUIZ
       let newAcct = this.getMenuItem("New Student", false, enabled)
-      newAcct.addEventListener('click', this.createNewAccount)
+      newAcct.addEventListener('click', this.createNewStudent)
       ul.appendChild(newAcct)
 
       enabled = stateMgr.accounts?.length > 1 && stateMgr.account?.state?.currentPage != pages.QUIZ
@@ -401,7 +401,7 @@ class SiteHeader {
       return li;
    }
 
-   createNewAccount(){
+   createNewStudent(){
       app.input(async (val) => { 
          let n = val.trim()
          if (n.length > 0) {
@@ -417,7 +417,8 @@ class SiteHeader {
             messageCenter.addError('Name cannot be blank.')
          }
       }, "Student's Name...");
-      document.getElementById('main-menu').remove();
+      document.getElementById('main-menu').remove()
+      document.getElementById('modal-input').focus()
    }
 
    async switchToAccount(id) {

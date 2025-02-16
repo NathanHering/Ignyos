@@ -20,3 +20,14 @@ body {
    font-size: xx-large;
    text-align: center;
 }
+
+.get-started {
+    cursor: pointer;
+    color: #758ca3;
+    font-size: .8em;
+    border: .1rem solid rgb(110, 161, 213);
+    border-radius: .2em;
+    width: fit-content;
+    margin: 0 auto;
+    padding: 5px 10px;
+}
