@@ -108,7 +108,6 @@ class App {
       this.hideModal()
       let bg = document.createElement('div')
       bg.id = 'modal-bg'
-      bg.classList.add('std-modal-bg')
       bg.addEventListener('click', this.hideModal)
       bg.appendChild(this.getConfirmModal(okFn, message))
       document.body.appendChild(bg)
@@ -123,20 +122,24 @@ class App {
       ele.classList.add('modal')
       ele.classList.add('confirm')
       ele.appendChild(msg)
-      ele.appendChild(this.getOkayBtn(okFn))
-      ele.appendChild(this.getCancelBtn())
+      const ctrls = document.createElement('div')
+      ctrls.appendChild(this.getOkayBtn(okFn))
+      ctrls.appendChild(this.getCancelBtn())
+      ctrls.classList.add('ctrls')
+      ele.appendChild(ctrls)
       ele.addEventListener('click', (event) => { event.stopPropagation() })
       return ele
    }
 
-   input(okFn, message = 'Enter Value') {
-      this.getModal(okFn, message, 'input')
+   input(okFn, message = 'Enter Value', addtlElement = null) {
+      this.getModal(okFn, message, 'input', addtlElement)
    }
 
-   getModal(okFn, message, type) {
+   getModal(okFn, message, type, addtlElement = null) {
       this.hideModal()
       let ele = document.createElement('div')
       ele.classList.add('modal')
+      if (addtlElement) ele.appendChild(addtlElement)
 
       let main;
       switch (type) {
@@ -158,13 +161,15 @@ class App {
       }
 
       ele.appendChild(main)
-      ele.appendChild(this.getOkayBtn(() => { okFn(main.value); }))
-      ele.appendChild(this.getCancelBtn())
+      const ctrls = document.createElement('div')
+      ctrls.appendChild(this.getOkayBtn(() => { okFn(main.value); }))
+      ctrls.appendChild(this.getCancelBtn())
+      ctrls.classList.add('ctrls')
+      ele.appendChild(ctrls)
       ele.addEventListener('click', (event) => { event.stopPropagation() })
       
       let bg = document.createElement('div')
       bg.id = 'modal-bg'
-      bg.classList.add('std-modal-bg')
       bg.addEventListener('click', this.hideModal)
       bg.appendChild(ele)
       document.body.appendChild(bg)
@@ -172,7 +177,7 @@ class App {
 
    getOkayBtn(okFn) {
       let ok = document.createElement('div')
-      ok.classList.add('btn')
+      ok.classList.add('modal-btn')
       ok.classList.add('ok')
       ok.innerText = 'OK'
       ok.addEventListener('click', okFn)
@@ -181,7 +186,7 @@ class App {
 
    getCancelBtn() {
       let cancel = document.createElement('div')
-      cancel.classList.add('btn')
+      cancel.classList.add('modal-btn')
       cancel.classList.add('cancel')
       cancel.innerText = 'CANCEL'
       cancel.addEventListener('click', this.hideModal)
@@ -416,9 +421,23 @@ class SiteHeader {
          } else {
             messageCenter.addError('Name cannot be blank.')
          }
-      }, "Student's Name...");
-      document.getElementById('main-menu').remove()
+      }, "Student's Name...", this.newStudentNotice);
+      document.getElementById('main-menu')?.remove()
       document.getElementById('modal-input').focus()
+   }
+
+   get newStudentNotice() {
+      let ele = document.createElement('div')
+      ele.classList.add('msg')
+      let title = document.createElement('h2')
+      title.innerText = "Enter your name."
+      ele.appendChild(title)
+      let msg = document.createElement('p')
+      msg.innerText = "We do not collect any personal information.\n\nAll data is stored locally on your device."
+      msg.style.maxWidth = '21em'
+      msg.style.margin = '1em auto'
+      ele.appendChild(msg)
+      return ele
    }
 
    async switchToAccount(id) {

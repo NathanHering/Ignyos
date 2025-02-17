@@ -46,10 +46,7 @@ page = {
       ele.classList.add('get-started')
       ele.innerText = "Get Started"
       ele.onclick = async () => {
-         await stateMgr.setPage(pages.FLASH_CARDS)
-         let pgEle = document.getElementById('page')
-         if (pgEle) pgEle.innerHTML = null
-         await app.route()         
+         new SiteHeader().createNewStudent()
       }
       return ele
    }

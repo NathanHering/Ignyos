@@ -250,6 +250,7 @@ background-repeat: no-repeat;
 /*#region Modal*/
 
 #modal-bg {
+    display: grid;
     background-color: #00000080;
     z-index: 2;
     position: absolute;
@@ -257,71 +258,68 @@ background-repeat: no-repeat;
     left: 0;
     bottom: 0;
     right: 0;
-    
-    display: grid;
-}
-
-.std-modal-bg {
-    grid-template-areas: '. . .' '. modal .' '. . .';
 }
 
 .modal {
     grid-area: modal;
-    display: grid;
-    grid-template-rows: 1fr 40px;
     background-color: rgb(30,35,40);
     border: .1rem solid rgba(70, 163, 255, .8);
-    border-radius: 6px;
-    min-width: 400px;
+    border-radius: .5em;
+    min-width: 24em;
     max-width: fit-content;
-    align-self: center;
-    justify-self: center;
 }
 
 .modal.confirm {
+    display: grid;
     grid-template-areas: 'msg msg'
-        'ok cancel ';
-    height: 200px;
+        'ctrls ctrls';
+    grid-template-rows: 1fr 3em;
+    height: 10em;
+    padding-top: 1em;
+}
+
+.modal.confirm .msg {
+    font-size: 1.6em;
 }
 
 .modal .msg {
     grid-area: msg;
-    font-size: 28;
-    align-self: center;
-    justify-self: center;
     color: #FFFFFFBB;
-    padding: 12px;
-    background-color: #00000050;
-    width: -webkit-fill-available;
-    margin: 24px;
-    margin-bottom: 12px;
-    border-radius: 6px;
-    border: solid 1px #00000080;
+    border-radius: .5em;
     text-align: center;
-    height: -webkit-fill-available;
 }
 
 .modal.input {
-    grid-template-areas: 'input input'
-        'ok cancel ';
-    height: 100px;
+    display: grid;
+    padding-top: 1em;
+    grid-template-areas: 'msg msg' 'input input'
+        'ctrls ctrls';
+    height: 15em;
+}
+
+.modal > .ctrls {
+    grid-area: ctrls;
+    display: grid;
+    grid-template-areas: 'ok . cancel';
+    grid-template-columns: auto 1fr auto;
+    margin: 0 1em;
 }
 
 .modal > input {
     grid-area: input;
-    font-size: 20;
+    font-size: 1.2em;
     align-self: center;
     justify-self: center;
     color: #000000bb;
-    padding: 4px;
+    padding: .3em;
     width: -webkit-fill-available;
-    margin: 13px;
-    border-radius: 6px;
+    margin: 1em;
+    border-radius: .2em;
     border: solid 1px #00000080;
     outline: none;
 }
 
-.modal > .btn {
+.modal-btn {
     width: 100px;
     background: linear-gradient(180deg, #FFFFFFAE 10px, #FFFFFF80);
     border: .1rem solid transparent;
@@ -340,18 +338,8 @@ background-repeat: no-repeat;
     grid-area: ok;
 }
 
-.modal .ok:hover {
-    animation: pulse-border-blue .6s infinite;
-    animation-direction: alternate;
-}
-
 .modal .cancel {
     grid-area: cancel;
-}
-
-.modal .cancel:hover {
-    animation: pulse-border-blue .6s infinite;
-    animation-direction: alternate;
 }
 
 /*#endregion*/
